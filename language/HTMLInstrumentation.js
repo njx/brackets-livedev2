@@ -740,7 +740,7 @@ define(function (require, exports, module) {
      *     mark ranges in.
      * @return {string} instrumented html content
      */
-    function generateInstrumentedHTML(editor, injectScript) {
+    function generateInstrumentedHTML(editor, remoteScript) {
         var doc = editor.document,
             dom = scanDocument(doc),
             orig = doc.getText(),
@@ -768,9 +768,9 @@ define(function (require, exports, module) {
                 // If we have a script to inject and this is the head tag, inject it immediately
                 // after the open tag.
                 // TODO: handle cases where explicit html/head are missing
-                if (injectScript && node.tag === "head") {
+                if (remoteScript && node.tag === "head") {
                     insertIndex = node.openEnd;
-                    gen += orig.substr(lastIndex, insertIndex - lastIndex) + injectScript;
+                    gen += orig.substr(lastIndex, insertIndex - lastIndex) + remoteScript;
                     lastIndex = insertIndex;
                 }
             }

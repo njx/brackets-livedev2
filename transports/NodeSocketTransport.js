@@ -29,7 +29,7 @@ define(function (require, exports, module) {
     
     var ExtensionUtils = brackets.getModule("utils/ExtensionUtils"),
         NodeDomain = brackets.getModule("utils/NodeDomain"),
-        RemoteSocketTransport = require("text!transports/inject/RemoteSocketTransport.js");
+        NodeSocketTransportRemote = require("text!transports/remote/NodeSocketTransportRemote.js");
 
     var NodeSocketTransportDomain = new NodeDomain("nodeSocketTransport", ExtensionUtils.getModulePath(module, "node/NodeSocketTransportDomain"));
     
@@ -37,9 +37,9 @@ define(function (require, exports, module) {
     // TODO: randomize this?
     var SOCKET_PORT = 8123;
     
-    function getInjectScript() {
+    function getRemoteScript() {
         return "<script>\n" +
-            RemoteSocketTransport +
+            NodeSocketTransportRemote +
             "this._Brackets_LiveDev_Socket_Transport_URL = 'ws://localhost:" + SOCKET_PORT + "';\n" +
             "</script>\n";
     }
@@ -58,7 +58,7 @@ define(function (require, exports, module) {
     
     // Exports
     
-    exports.getInjectScript = getInjectScript;
+    exports.getRemoteScript = getRemoteScript;
     
     // Proxy the node domain methods directly through, since they have exactly the same
     // signatures as the ones we're supposed to provide.

@@ -27,7 +27,7 @@
 define(function (require, exports, module) {
     "use strict";
     
-    var RemoteProtocolHandler = require("text!inject/RemoteProtocolHandler.js");
+    var LiveDevProtocolRemote = require("text!remote/LiveDevProtocolRemote.js");
     
     var _transport = null,
         _nextMsgId = 1,
@@ -77,10 +77,10 @@ define(function (require, exports, module) {
             });
     }
     
-    function getInjectScript() {
-        var transportScript = _transport.getInjectScript();
+    function getRemoteScript() {
+        var transportScript = _transport.getRemoteScript();
         return transportScript +
-            "<script>\n" + RemoteProtocolHandler + "</script>\n";
+            "<script>\n" + LiveDevProtocolRemote + "</script>\n";
     }
     
     function launch(url) {
@@ -100,7 +100,7 @@ define(function (require, exports, module) {
     }
     
     exports.setTransport = setTransport;
-    exports.getInjectScript = getInjectScript;
+    exports.getRemoteScript = getRemoteScript;
     exports.launch = launch;
     exports.evaluate = evaluate;
 });

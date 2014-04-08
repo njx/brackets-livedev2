@@ -108,7 +108,7 @@ define(function (require, exports, module) {
     LiveHTMLDocument.prototype.getResponseData = function getResponseData(enabled) {
         var body;
         if (this._instrumentationEnabled) {
-            body = HTMLInstrumentation.generateInstrumentedHTML(this.editor, this.protocol.getInjectScript());
+            body = HTMLInstrumentation.generateInstrumentedHTML(this.editor, this.protocol.getRemoteScript());
         }
         
         return {

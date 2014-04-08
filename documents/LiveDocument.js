@@ -59,8 +59,9 @@ define(function (require, exports, module) {
     }
     
     LiveDocument.prototype.close = function () {
+        var self = this;
         this.getConnectionIds().forEach(function (clientId) {
-            this.protocol.close(clientId);
+            self.protocol.close(clientId);
         });
         this.connections = {};
         $(this.protocol)
