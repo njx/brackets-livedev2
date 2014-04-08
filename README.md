@@ -11,6 +11,7 @@ If you install the extension, you'll get a second lightning bolt on the toolbar.
 Lots:
 
 * CSS live development isn't implemented - this will need code to handle hot replacement of stylesheets in the browser
+* Closing live dev doesn't close the window in the browser. This might be impossible due to the restriction that JS can't close windows that aren't opened via JS, but we might want to at least show something in the browser indicating that the connection was terminated.
 * Menu items don't work/reflect state (artifact of this being an extension that duplicates the functionality, probably not worth fixing)
 * I wanted to change up how the Server stuff worked, but it turned out not to be necessary for the prototype and it might just be orthogonal.
 * Still needs a fair amount of code cleanup and documentation
