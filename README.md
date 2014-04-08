@@ -23,6 +23,8 @@ Bugs/cleanup/TODO:
 * Haven't thought through how we should indicate in the UI when multiple browser clients are active, and whether we should turn the lightning bolt off when the last one disconnects
 * Doesn't show an error if the browser never connects back
 * _ prefixing of private members isn't consistent; other code style cleanup
+* spurious errors when socket is closed
+* hard-coded port number for WebSocket server (might be fine)
 * Lots of TODOs in the code
 * Probably lots of other bugs
 

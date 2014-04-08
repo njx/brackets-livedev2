@@ -99,8 +99,13 @@ define(function (require, exports, module) {
         );
     }
     
+    function close(clientId) {
+        _transport.close(clientId);
+    }
+    
     exports.setTransport = setTransport;
     exports.getRemoteScript = getRemoteScript;
     exports.launch = launch;
     exports.evaluate = evaluate;
+    exports.close = close;
 });
