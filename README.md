@@ -18,7 +18,6 @@ Lots:
 
 Bugs/cleanup/TODO:
 
-* If you open live preview in one browser and then immediately open the same URL in another browser, then do edits in the HTML, it works in both, but if you do edits in the first browser before opening the URL in the second browser, it only works in the second browser. It seems like the instrumentation IDs are changing in the HTML for some reason.
 * Lightning bolt status is wrong - never turns off
 * Haven't thought through how we should indicate in the UI when multiple browser clients are active, and whether we should turn the lightning bolt off when the last one disconnects
 * Doesn't show an error if the browser never connects back
@@ -60,5 +59,5 @@ TODO: more detailed notes about the interface transports are expected to impleme
 * CSSDocument and HTMLDocument were renamed to LiveCSSDocument and LiveHTMLDocument, with a new LiveDocument base class
 * the "agents" are all gone - a lot of them were dead code anyway; other functionality was rolled into LiveDocument
 * communication is factored into transport and protocol layers (see above)
-* HTMLInstrumentation and HTMLSimpleDOM were modified slightly (which is why they're copied into the extension) - but those changes could be easily merged into Brackets master without breaking the existing LiveDevelopment code
+* HTMLInstrumentation and HTMLSimpleDOM were modified slightly (which is why they're copied into the extension), to make it possible to inject the remote scripts and to fix an issue with re-instrumenting the HTML when a second browser connects to Live Development. The former change is harmless; the latter change would need some review or possibly more work in order to merge into master. 
 * ignore the changes to main.js and the copied styles for now - those were just to make this work as an extension and avoid conflicting with the existing LiveDocument functionality
