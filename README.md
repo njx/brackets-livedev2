@@ -4,7 +4,7 @@ More notes are coming - these are rough notes.
 
 ### What's working
 
-If you install the extension, you'll get a second lightning bolt on the toolbar. You can open an HTML page and then click it to enter HTML live development using the extension. This will launch the page in your default browser. You can also copy and paste the URL from that browser into any other browser and do live development in the other browser.
+If you install the extension, you'll get a second lightning bolt on the toolbar (below the Extension Manager icon). You can open an HTML page (I've only tried the Getting Started page) and then click that second lightning bolt to enter HTML live development using the extension. This will launch the page in your default browser. You should then also be able to copy and paste the URL from that browser into any other browser (I tried Firefox and Safari) - live edits will then update all connected browsers at once.
 
 ### What's not working
 
