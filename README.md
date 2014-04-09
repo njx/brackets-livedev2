@@ -12,18 +12,17 @@ Lots:
 
 * CSS live development isn't implemented - this will need code to handle hot replacement of stylesheets in the browser (in the protocol layer and in the remote protocol script), and requires re-enabling of various commented-out code in LiveCSSDocument and in LiveDevelopment that tracks requested CSS files.
 * Closing live dev doesn't close the window in the browser. This might be impossible due to the restriction that JS can't close windows that aren't opened via JS, but we might want to at least show something in the browser indicating that the connection was terminated.
-* Menu items don't work/reflect state (artifact of this being an extension that duplicates the functionality, probably not worth fixing)
+* Switching files in Brackets opens a new tab. This is partly FOL due to closing live dev not closing the window in the browser. We should consider changing the workflow to allow multiple files to be previewed anyway (rather than only having a single preview that changes as you switch files in Brackets).
 * I wanted to change up how the Server stuff worked, but it turned out not to be necessary for the prototype and it might just be orthogonal.
 * Still needs a fair amount of code cleanup and documentation
 
 Bugs/cleanup/TODO:
 
-* Lightning bolt status is wrong - never turns off
-* Haven't thought through how we should indicate in the UI when multiple browser clients are active, and whether we should turn the lightning bolt off when the last one disconnects
+* Lightning bolt status is wrong - never turns off. Haven't thought through how we should indicate in the UI when multiple browser clients are active, and whether we should turn the lightning bolt off when the last one disconnects - this might also change if we change the workflow to allow multiple files to be previewed
 * Doesn't show an error if the browser never connects back
-* _ prefixing of private members isn't consistent; other code style cleanup
 * spurious errors when socket is closed
 * hard-coded port number for WebSocket server (might be fine)
+* _ prefixing of private members isn't consistent; other code style cleanup
 * Lots of TODOs in the code
 * Probably lots of other bugs
 

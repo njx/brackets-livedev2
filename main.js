@@ -49,21 +49,11 @@ define(function main(require, exports, module) {
         Strings             = brackets.getModule("strings"),
         ExtensionUtils      = brackets.getModule("utils/ExtensionUtils"),
         StringUtils         = brackets.getModule("utils/StringUtils"),
+        Menus               = brackets.getModule("command/Menus"),
         LiveDevelopment     = require("LiveDevelopment");
 
     var params = new UrlParams();
-    var config = {
-        debug: true, // enable debug output and helpers
-        highlight: true, // enable highlighting?
-        highlightConfig: { // the highlight configuration for the Inspector
-            borderColor:  {r: 255, g: 229, b: 153, a: 0.66},
-            contentColor: {r: 111, g: 168, b: 220, a: 0.55},
-            marginColor:  {r: 246, g: 178, b: 107, a: 0.66},
-            paddingColor: {r: 147, g: 196, b: 125, a: 0.66},
-            showInfo: true
-        }
-    };
-    var _checkMark = "✓"; // Check mark character
+
     // Status labels/styles are ordered: error, not connected, progress1, progress2, connected.
     var _statusTooltip = [
         Strings.LIVE_DEV_STATUS_TIP_NOT_CONNECTED,
@@ -184,74 +174,43 @@ define(function main(require, exports, module) {
         $(LiveDevelopment).on("statusChange", function statusChange(event, status) {
             // Update the checkmark next to 'Live Preview' menu item
             // Add checkmark when status is STATUS_ACTIVE; otherwise remove it
-            CommandManager.get(Commands.FILE_LIVE_FILE_PREVIEW).setChecked(status === LiveDevelopment.STATUS_ACTIVE);
-            CommandManager.get(Commands.FILE_LIVE_HIGHLIGHT).setEnabled(status === LiveDevelopment.STATUS_ACTIVE);
+            CommandManager.get("livedev2.live-preview").setChecked(status === LiveDevelopment.STATUS_ACTIVE);
+            CommandManager.get("livedev2.live-preview").setEnabled(status === LiveDevelopment.STATUS_ACTIVE);
         });
     }
 
     function _updateHighlightCheckmark() {
-        CommandManager.get(Commands.FILE_LIVE_HIGHLIGHT).setChecked(config.highlight);
+        CommandManager.get("livedev2.live-highlight").setChecked(PreferencesManager.getViewState("livedev2.highlight"));
     }
     
     function _handlePreviewHighlightCommand() {
-        config.highlight = !config.highlight;
-        _updateHighlightCheckmark();
-        if (config.highlight) {
-            LiveDevelopment.showHighlight();
-        } else {
-            LiveDevelopment.hideHighlight();
-        }
-        PreferencesManager.setViewState("livedev2.highlight", config.highlight);
+        PreferencesManager.setViewState("livedev2.highlight", !PreferencesManager.getViewState("livedev2.highlight"));
     }
     
-    /** Setup window references to useful LiveDevelopment modules */
-    function _setupDebugHelpers() {
-        window.ld = LiveDevelopment;
-        window.report = function report(params) { window.params = params; console.info(params); };
-    }
-
     /** Initialize LiveDevelopment */
     AppInit.appReady(function () {
         params.parse();
 
-        LiveDevelopment.init(config);
+        LiveDevelopment.init();
         _setupGoLiveButton();
         _setupGoLiveMenu();
 
         _updateHighlightCheckmark();
-        
-        if (config.debug) {
-            _setupDebugHelpers();
-        }
-
-        // Redraw highlights when window gets focus. This ensures that the highlights
-        // will be in sync with any DOM changes that may have occurred.
-        $(window).focus(function () {
-            // TODO: only if live development is toggled on
-            if (config.highlight) {
-                LiveDevelopment.redrawHighlight();
-            }
-        });
     });
     
     // init prefs
     PreferencesManager.stateManager.definePreference("livedev2.highlight", "boolean", true)
         .on("change", function () {
-            config.highlight = PreferencesManager.getViewState("livedev2.highlight");
             _updateHighlightCheckmark();
         });
     
-//    PreferencesManager.convertPreferences(module, {
-//        "highlight": "user livedev.highlight",
-//        "afterFirstLaunch": "user livedev.afterFirstLaunch"
-//    }, true);
-    
-    config.highlight = PreferencesManager.getViewState("livedev2.highlight");
-   
     // init commands
-    CommandManager.register(Strings.CMD_LIVE_FILE_PREVIEW, "livedev2.live-preview", _handleGoLiveCommand);
-    CommandManager.register(Strings.CMD_LIVE_HIGHLIGHT, "livedev2.live-highlight", _handlePreviewHighlightCommand);
+    CommandManager.register("(New) Live Preview", "livedev2.live-preview", _handleGoLiveCommand);
+    CommandManager.register("(New) Live Preview Highlight", "livedev2.live-highlight", _handlePreviewHighlightCommand);
     CommandManager.get(Commands.FILE_LIVE_HIGHLIGHT).setEnabled(false);
+    
+    Menus.getMenu(Menus.AppMenuBar.FILE_MENU).addMenuItem("livedev2.live-preview");
+    Menus.getMenu(Menus.AppMenuBar.VIEW_MENU).addMenuItem("livedev2.live-highlight");
     
     ExtensionUtils.loadStyleSheet(module, "styles/styles.css");
 });

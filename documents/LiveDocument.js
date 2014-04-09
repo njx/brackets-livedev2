@@ -28,8 +28,9 @@
 define(function (require, exports, module) {
     "use strict";
     
-    var EditorManager   = brackets.getModule("editor/EditorManager"),
-        _               = brackets.getModule("thirdparty/lodash");
+    var EditorManager       = brackets.getModule("editor/EditorManager"),
+        PreferencesManager  = brackets.getModule("preferences/PreferencesManager"),
+        _                   = brackets.getModule("thirdparty/lodash");
         
     // Document errors
     var SYNC_ERROR_CLASS = "live-preview-sync-error";
@@ -49,9 +50,17 @@ define(function (require, exports, module) {
         
         this._onActiveEditorChange = this._onActiveEditorChange.bind(this);
         this._onCursorActivity = this._onCursorActivity.bind(this);
+        this._onHighlightPrefChange = this._onHighlightPrefChange.bind(this);
 
         $(EditorManager).on("activeEditorChange", this._onActiveEditorChange);
-        
+
+        PreferencesManager.stateManager.getPreference("livedev2.highlight")
+            .on("change", this._onHighlightPrefChange);
+       
+        // Redraw highlights when window gets focus. This ensures that the highlights
+        // will be in sync with any DOM changes that may have occurred.
+        $(window).focus(this._onHighlightPrefChange);
+
         if (editor) {
             // Attach now
             this.attachToEditor(editor);
@@ -70,12 +79,22 @@ define(function (require, exports, module) {
         this._clearErrorDisplay();
         this.detachFromEditor();
         $(EditorManager).off("activeEditorChange", this._onActiveEditorChange);
+        PreferencesManager.stateManager.getPreference("livedev2.highlight")
+            .on("change", this._onHighlightPrefChange);
     };
     
     LiveDocument.prototype.getConnectionIds = function () {
         return Object.keys(this.connections);
     };
     
+    LiveDocument.prototype._onHighlightPrefChange = function () {
+        if (PreferencesManager.getViewState("livedev2.highlight")) {
+            this.updateHighlight();
+        } else {
+            this.hideHighlight();
+        }
+    };
+       
     LiveDocument.prototype._onActiveEditorChange = function (event, newActive, oldActive) {
         this.detachFromEditor();
         
@@ -211,8 +230,8 @@ define(function (require, exports, module) {
     };
     
     LiveDocument.prototype.hideHighlight = function () {
-        // TODO: eval hideHighlight in browser
-//        RemoteAgent.call("hideHighlight");
+        this._lastHighlight = null;
+        this.protocol.evaluate(this.getConnectionIds(), "_LD.hideHighlight()");
     };
 
     /** Highlight all nodes affected by a CSS rule

@@ -471,7 +471,7 @@ define(function (require, exports, module) {
         }
 
         if (doCloseWindow) {
-            // TODO: send message to browser page to close itself
+            // TODO: don't have a way to do this in the new architecture
         }
         
         _setStatus(STATUS_INACTIVE, reason || "explicit_close");
@@ -618,28 +618,6 @@ define(function (require, exports, module) {
         });
     }
     
-    // TODO: highlight management should just happen through prefs probably
-    /** Enable highlighting */
-    function showHighlight() {
-        var doc = getLiveDocForEditor(EditorManager.getActiveEditor());
-        
-        if (doc && doc.updateHighlight) {
-            doc.updateHighlight();
-        }
-    }
-
-    /** Hide any active highlighting */
-    function hideHighlight() {
-        // TODO: figure out right factoring for HighlightAgent
-        // HighlightAgent.hide();
-    }
-    
-    /** Redraw highlights **/
-    function redrawHighlight() {
-        // TODO: figure out right factoring for HighlightAgent
-        // HighlightAgent.redraw();
-    }
-
     /**
      * @private
      * DocumentManager currentDocumentChange event handler. 
@@ -666,10 +644,6 @@ define(function (require, exports, module) {
             _createLiveDocumentForFrame(doc);
 
             open();
-        } else {
-            // TODO: only if this was a dependent file (e.g. a stylesheet)
-            // Update highlight
-            // showHighlight();
         }
     }
 
@@ -726,9 +700,7 @@ define(function (require, exports, module) {
     }
 
     /** Initialize the LiveDevelopment Session */
-    function init(theConfig) {
-        exports.config = theConfig;
-        
+    function init() {
         $(DocumentManager).on("currentDocumentChange", _onDocumentChange)
             .on("documentSaved", _onDocumentSaved)
             .on("dirtyFlagChange", _onDirtyFlagChange);
@@ -762,9 +734,6 @@ define(function (require, exports, module) {
     exports.open                = open;
     exports.close               = close;
     exports.getLiveDocForPath   = getLiveDocForPath;
-    exports.showHighlight       = showHighlight;
-    exports.hideHighlight       = hideHighlight;
-    exports.redrawHighlight     = redrawHighlight;
     exports.init                = init;
     exports.isActive            = isActive;
     exports.getCurrentProjectServerConfig = getCurrentProjectServerConfig;
