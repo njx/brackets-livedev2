@@ -600,6 +600,10 @@ define(function (require, exports, module) {
                 dom: result.dom,
                 dirty: false
             };
+            // Since this was an incremental update, we can't rely on the node start/end offsets
+            // in the dom (because nodes after the updated portion didn't have their offsets
+            // updated); the marks in the editor are more accurate.
+            // TODO: should we consider ripping through the dom and fixing up other offsets?
             result.dom.fullBuild = false;
             return { edits: result.edits };
         } else {
@@ -708,7 +712,8 @@ define(function (require, exports, module) {
         
         var cachedValue = _cachedValues[doc.file.fullPath];
         // TODO: No longer look at doc or cached value "dirty" settings, because even if the doc is dirty, the dom
-        // should generally be up to date unless the HTML is invalid.
+        // should generally be up to date unless the HTML is invalid. (However, the node offsets will be dirty of
+        // the dom was incrementally updated - we should note that somewhere.)
         if (cachedValue && !cachedValue.invalid && cachedValue.timestamp === doc.diskTimestamp) {
             return cachedValue.dom;
         }
@@ -723,6 +728,7 @@ define(function (require, exports, module) {
                 dom: dom,
                 dirty: false
             };
+            // Note that this was a full build, so we know that we can trust the node start/end offsets.
             dom.fullBuild = true;
         }
         
