@@ -86,6 +86,8 @@ define(function (require, exports, module) {
             return;
         }
         if (enabled && !this._instrumentationEnabled) {
+            // TODO: not clear why we do this here instead of waiting for the next time we want to
+            // generate the instrumented HTML. This won't work if the dom offsets are out of date.
             HTMLInstrumentation.scanDocument(this.doc);
             HTMLInstrumentation._markText(this.editor);
         }

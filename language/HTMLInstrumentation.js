@@ -600,6 +600,7 @@ define(function (require, exports, module) {
                 dom: result.dom,
                 dirty: false
             };
+            result.dom.fullBuild = false;
             return { edits: result.edits };
         } else {
             if (cachedValue) {
@@ -693,18 +694,22 @@ define(function (require, exports, module) {
      */
     function scanDocument(doc) {
         if (!_cachedValues.hasOwnProperty(doc.file.fullPath)) {
-            $(doc).on("change.htmlInstrumentation", function () {
-                if (_cachedValues[doc.file.fullPath]) {
-                    _cachedValues[doc.file.fullPath].dirty = true;
-                }
-            });
+            // TODO: this doesn't seem to be correct any more. The DOM should never be "dirty" (i.e., out of sync
+            // with the editor) unless the doc is invalid.
+//            $(doc).on("change.htmlInstrumentation", function () {
+//                if (_cachedValues[doc.file.fullPath]) {
+//                    _cachedValues[doc.file.fullPath].dirty = true;
+//                }
+//            });
             
             // Assign to cache, but don't set a value yet
             _cachedValues[doc.file.fullPath] = null;
         }
         
         var cachedValue = _cachedValues[doc.file.fullPath];
-        if (!doc.isDirty && cachedValue && !cachedValue.dirty && cachedValue.timestamp === doc.diskTimestamp) {
+        // TODO: No longer look at doc or cached value "dirty" settings, because even if the doc is dirty, the dom
+        // should generally be up to date unless the HTML is invalid.
+        if (cachedValue && !cachedValue.invalid && cachedValue.timestamp === doc.diskTimestamp) {
             return cachedValue.dom;
         }
         
@@ -718,6 +723,7 @@ define(function (require, exports, module) {
                 dom: dom,
                 dirty: false
             };
+            dom.fullBuild = true;
         }
         
         return dom;
@@ -745,14 +751,26 @@ define(function (require, exports, module) {
             dom = scanDocument(doc),
             orig = doc.getText(),
             gen = "",
-            lastIndex = 0;
+            lastIndex = 0,
+            markCache;
         
         if (!dom) {
             return null;
         }
         
         // Ensure that the marks in the editor are up to date with respect to the given DOM.
-        _markTextFromDOM(editor, dom);
+        // (But only do this if the dom we got back from scanDocument() was a full rebuild. Otherwise,
+        // rely on the marks in the editor.)
+        if (dom.fullBuild) {
+            _markTextFromDOM(editor, dom);
+        } else {
+            markCache = {};
+            editor._codeMirror.getAllMarks().forEach(function (mark) {
+                if (mark.tagID) {
+                    markCache[mark.tagID] = { mark: mark, range: mark.find() };
+                }
+            });
+        }
         
         // Walk through the dom nodes and insert the 'data-brackets-id' attribute at the
         // end of the open tag        
@@ -760,8 +778,23 @@ define(function (require, exports, module) {
             if (node.tag) {
                 var attrText = " data-brackets-id='" + node.tagID + "'";
                 
+                // If the dom was fully rebuilt, use its offsets. Otherwise, use the marks in the
+                // associated editor, since they'll be more up to date.
+                var startOffset;
+                if (dom.fullBuild) {
+                    startOffset = node.start;
+                } else {
+                    var mark = markCache[node.tagID];
+                    if (mark) {
+                        startOffset = editor._codeMirror.indexFromPos(mark.range.from);
+                    } else {
+                        console.warn("generateInstrumentedHTML(): couldn't find existing mark for tagID " + node.tagID);
+                        startOffset = node.start;
+                    }
+                }
+                
                 // Insert the attribute as the first attribute in the tag.
-                var insertIndex = node.start + node.tag.length + 1;
+                var insertIndex = startOffset + node.tag.length + 1;
                 gen += orig.substr(lastIndex, insertIndex - lastIndex) + attrText;
                 lastIndex = insertIndex;
                 
@@ -803,6 +836,9 @@ define(function (require, exports, module) {
         
         if (!dom) {
             console.error("Couldn't find the dom for " + editor.document.file.fullPath);
+            return;
+        } else if (!dom.fullBuild) {
+            console.error("Tried to mark text from a stale DOM for " + editor.document.file.fullPath);
             return;
         }
         
