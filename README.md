@@ -54,6 +54,8 @@ If we want to eventually reintroduce a CDT connection (or hook up to RemoteDebug
 
 ### Explanation of the flow
 
+I've created a [really crappy block diagram](https://raw.githubusercontent.com/wiki/njx/brackets-livedev2/livedev2-block-diagram.png) of how the various bits talk to each other.
+
 Here's a short summary of what happens when the user clicks on the Live Preview button on an HTML page.
 
 1. LiveDevelopment creates a LiveHTMLDocument for the page, passing it the protocol handler (LiveDevProtocol). LiveHTMLDocument manages communication between the editor and the browser for HTML pages.
@@ -73,9 +75,15 @@ Here's a short summary of what happens when the user clicks on the Live Preview 
 
 The main next steps are:
 
+#### Strategy for including the new functionality in the XDK
+
+TBD. Not sure if we want to get this into Brackets core before 1.0, so we'll probably need a way to let the XDK remove the existing LiveDevelopment and include the extension. The main issue here is that the LiveDevServerManager and Servers would still need to be instantiated (they're not currently in the extension).
+
 #### Internal (iframe) preview transport
 
 The XDK would like to provide a live preview in the app itself (rather than in an external browser). This should be easy to implement by simply creating a different transport that opens the document in an `<iframe>` and communicates with it via `postMessage()`.
+
+We might also need to add a way to allow for multiple transports to be active at the same time.
 
 #### CSS live editing
 
@@ -92,6 +100,10 @@ Note that we might want to deal with (1) a different way. In the old Live Develo
 There's a similar need to track other related non-CSS documents (e.g. JS files) that are loaded by the current live HTML file; we do this because for those files, we want to reload the full page whenever the user saves those files. (See comments in LiveDevelopment._onDocumentSaved().) In the old Live Development, we did this by looking at a different CDT event that was sent out whenever the page was about to request a file. Again, I think we could just replace that with the same mechanism described above (having the server tell us what files were requested).
 
 In the future, if we allow multiple files to be previewed simultaneously, we would need to match requested files to the pages that loaded them. I think we could still do that on the Brackets server side by looking at the referrer. 
+
+#### Figure out how to launch multiple browsers from the UI
+
+TBD. My initial thinking for Brackets is that we would turn the lightning bolt into a dropdown button, where clicking on the dropdown arrow would give you a choice of browsers. We would also need some way to configure the browser executable paths, or autodetect them for common cases.
 
 ### Changes from existing LiveDevelopment code
 
