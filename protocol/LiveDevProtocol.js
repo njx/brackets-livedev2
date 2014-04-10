@@ -42,7 +42,7 @@ define(function (require, exports, module) {
     "use strict";
     
     // Text of the script we'll inject into the browser that handles protocol requests.
-    var LiveDevProtocolRemote = require("text!remote/LiveDevProtocolRemote.js");
+    var LiveDevProtocolRemote = require("text!protocol/remote/LiveDevProtocolRemote.js");
     
     /**
      * @private

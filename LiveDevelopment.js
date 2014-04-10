@@ -86,7 +86,7 @@ define(function (require, exports, module) {
         _                    = brackets.getModule("thirdparty/lodash"),
         LiveDevServerManager = brackets.getModule("LiveDevelopment/LiveDevServerManager"),
         NodeSocketTransport  = require("transports/NodeSocketTransport"),
-        LiveDevProtocol      = require("LiveDevProtocol");
+        LiveDevProtocol      = require("protocol/LiveDevProtocol");
     
     // Documents
     var LiveCSSDocument     = require("documents/LiveCSSDocument"),
