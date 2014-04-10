@@ -101,6 +101,10 @@ There's a similar need to track other related non-CSS documents (e.g. JS files) 
 
 In the future, if we allow multiple files to be previewed simultaneously, we would need to match requested files to the pages that loaded them. I think we could still do that on the Brackets server side by looking at the referrer. 
 
+#### Unit tests
+
+We would definitely need a good suite of unit tests for the new functionality. I suspect it would be easier to just write entirely new, more granular unit tests than to try to reuse the old LiveDevelopment integration tests (which were fragile anyway).
+
 #### Figure out how to launch multiple browsers from the UI
 
 TBD. My initial thinking for Brackets is that we would turn the lightning bolt into a dropdown button, where clicking on the dropdown arrow would give you a choice of browsers. We would also need some way to configure the browser executable paths, or autodetect them for common cases.
