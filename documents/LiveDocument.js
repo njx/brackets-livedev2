@@ -32,9 +32,33 @@ define(function (require, exports, module) {
         PreferencesManager  = brackets.getModule("preferences/PreferencesManager"),
         _                   = brackets.getModule("thirdparty/lodash");
         
-    // Document errors
+    /**
+     * @const
+     * CSS class to use for live preview errors.
+     * @type {string}
+     */
     var SYNC_ERROR_CLASS = "live-preview-sync-error";
 
+    /**
+     * @constructor
+     * Base class for managing the connection between a live editor and the browser. Provides functions
+     * for subclasses to highlight relevant nodes in the browser, and to mark errors in the editor.
+     *
+     * Raises these events:
+     *     "connect" - when a browser connects from the URL that maps to this live document. Passes the
+     *          URL as a parameter.
+     *     "errorStatusChanged" - when the status of errors that might prevent live edits from
+     *          working (e.g. HTML syntax errors) has changed. Passes a boolean that's true if there
+     *          are errors, false otherwise.
+     *
+     * @param {LiveDevProtocol} protocol The protocol to use for communicating with the browser.
+     * @param {function(string): string} urlResolver A function that, given a path on disk, should return
+     *     the URL that Live Development serves that path at.
+     * @param {Document} doc The Brackets document that this live document is connected to.
+     * @param {?Editor} editor If specified, a particular editor that this live document is managing.
+     *     If not specified initially, the LiveDocument will connect to the editor for the given document
+     *     when it next becomes the active editor.
+     */
     function LiveDocument(protocol, urlResolver, doc, editor) {
         this.protocol = protocol;
         this.urlResolver = urlResolver;
@@ -63,10 +87,13 @@ define(function (require, exports, module) {
 
         if (editor) {
             // Attach now
-            this.attachToEditor(editor);
+            this._attachToEditor(editor);
         }
     }
     
+    /**
+     * Closes the document, terminating its connection to the browser.
+     */
     LiveDocument.prototype.close = function () {
         var self = this;
         this.getConnectionIds().forEach(function (clientId) {
@@ -77,16 +104,24 @@ define(function (require, exports, module) {
             .off("connect", this._onConnect)
             .off("close", this._onClose);
         this._clearErrorDisplay();
-        this.detachFromEditor();
+        this._detachFromEditor();
         $(EditorManager).off("activeEditorChange", this._onActiveEditorChange);
         PreferencesManager.stateManager.getPreference("livedev2.highlight")
             .on("change", this._onHighlightPrefChange);
     };
     
+    /**
+     * Returns an array of the client IDs that are being managed by this live document.
+     * @return {Array.<number>}
+     */
     LiveDocument.prototype.getConnectionIds = function () {
         return Object.keys(this.connections);
     };
     
+    /**
+     * @private
+     * Handles changes to the "Live Highlight" preference, switching it on/off in the browser as appropriate.
+     */
     LiveDocument.prototype._onHighlightPrefChange = function () {
         if (PreferencesManager.getViewState("livedev2.highlight")) {
             this.updateHighlight();
@@ -94,15 +129,30 @@ define(function (require, exports, module) {
             this.hideHighlight();
         }
     };
-       
+    
+    /**
+     * @private
+     * Handles when the active editor changes, attaching to the new editor if it's for the current document.
+     * @param {$.Event} event
+     * @param {?Editor} newActive
+     * @param {?Editor} oldActive
+     */
     LiveDocument.prototype._onActiveEditorChange = function (event, newActive, oldActive) {
-        this.detachFromEditor();
+        this._detachFromEditor();
         
         if (newActive && newActive.document === this.doc) {
-            this.attachToEditor(newActive);
+            this._attachToEditor(newActive);
         }
     };
 
+    /**
+     * @private
+     * Handles when a connection is made to the live development protocol handler.
+     * Records the connection's client ID and triggers the "connect" event.
+     * @param {$.Event} event
+     * @param {number} clientId
+     * @param {string} url
+     */
     LiveDocument.prototype._onConnect = function (event, clientId, url) {
         if (url === this.urlResolver(this.doc.file.fullPath)) {
             this.connections[clientId] = true;
@@ -110,12 +160,24 @@ define(function (require, exports, module) {
         }
     };
     
+    /**
+     * @private
+     * Handles when a connection is closed.
+     * @param {$.Event} event
+     * @param {number} clientId
+     */
     LiveDocument.prototype._onClose = function (event, clientId) {
-        // TODO: notify Live Development if this is the last connection so we can show disconnected
+        // TODO: notify Live Development if this is the last connection so we can show disconnected? Or
+        // should we just leave the connection open in case another browser wants to connect?
         delete this.connections[clientId];
     };
     
-    LiveDocument.prototype.attachToEditor = function (editor) {
+    /**
+     * @private
+     * Attaches to an editor for our associated document when it becomes active.
+     * @param {Editor} editor
+     */
+    LiveDocument.prototype._attachToEditor = function (editor) {
         this.editor = editor;
         
         if (this.editor) {
@@ -124,39 +186,24 @@ define(function (require, exports, module) {
         }
     };
     
-    LiveDocument.prototype.detachFromEditor = function () {
+    /**
+     * @private
+     * Detaches from the current editor.
+     */
+    LiveDocument.prototype._detachFromEditor = function () {
         if (this.editor) {
             this.hideHighlight();
             $(this.editor).off("cursorActivity", this._onCursorActivity);
             this.editor = null;
         }
     };
-    
-//    function currentUrl() {
-//        var doc = _getCurrentDocument();
-//        if (!isActive() || !_server || !doc) {
-//            return null;
-//        }
-//        return _server.pathToUrl(doc.file.fullPath);
-//    }
-//    
-//    function _handleLiveDevConnect(event, id, url) {
-//        if (url === currentUrl()) {
-//            // Multiple clients can connect back to us for the same URL. Note that we're active
-//            // as soon as the first one connects back.
-//            _connections[id] = true;
-//            _setStatus(STATUS_ACTIVE);
-//        } else {
-//            // Refuse the connection.
-//            _protocol.close(id);
-//        }
-//    }
-//    
-//    function _handleLiveDevClose(event, id) {
-//        _closeConnection(id);
-//    }
-    
-    
+
+    /**
+     * @private
+     * Handles a cursor change in our attached editor. Updates the highlight in the browser.
+     * @param {$.Event} event
+     * @param {Editor} editor
+     */
     LiveDocument.prototype._onCursorActivity = function (event, editor) {
         if (!this.editor) {
             return;
@@ -166,7 +213,8 @@ define(function (require, exports, module) {
     
     /**
      * @private
-     * Update errors shown by the live document in the editor.
+     * Update errors shown by the live document in the editor. Should be called by subclasses
+     * when the list of errors changes.
      */
     LiveDocument.prototype._updateErrorDisplay = function () {
         var self = this,
@@ -201,6 +249,10 @@ define(function (require, exports, module) {
         $(this).triggerHandler("errorStatusChanged", [!!this.errors.length]);
     };
     
+    /**
+     * @private
+     * Clears the errors shown in the attached editor.
+     */
     LiveDocument.prototype._clearErrorDisplay = function () {
         var self = this,
             lineHandle;
@@ -225,17 +277,27 @@ define(function (require, exports, module) {
         });
     };
     
+    /**
+     * Called when the highlight in the browser should be updated because the user has
+     * changed the selection. Does nothing in base class, should be implemented by subclasses
+     * that implement highlighting functionality.
+     */
     LiveDocument.prototype.updateHighlight = function () {
         // Does nothing in base class
     };
     
+    /**
+     * Hides the current highlight in the browser.
+     */
     LiveDocument.prototype.hideHighlight = function () {
         this._lastHighlight = null;
         this.protocol.evaluate(this.getConnectionIds(), "_LD.hideHighlight()");
     };
 
-    /** Highlight all nodes affected by a CSS rule
-     * @param {string} rule selector
+    /**
+     * Highlight all nodes affected by a CSS rule. Should be called by subclass implementations of
+     * `updateHighlight()`.
+     * @param {string} name The selector whose matched nodes should be highlighted.
      */
     LiveDocument.prototype.highlightRule = function (name) {
         if (this._lastHighlight === name) {
@@ -246,9 +308,12 @@ define(function (require, exports, module) {
         this.protocol.evaluate(this.getConnectionIds(), "_LD.highlightRule(" + JSON.stringify(name) + ")");
     };
     
-    /** Highlight all nodes with 'data-brackets-id' value
+    /** 
+     * Highlight all nodes with 'data-brackets-id' value
      * that matches id, or if id is an array, matches any of the given ids.
-     * @param {string|Array<string>} value of the 'data-brackets-id' to match,
+     * Should be called by subclass implementations of
+     * `updateHighlight()`.
+     * @param {string|Array.<string>} value of the 'data-brackets-id' to match,
      * or an array of such.
      */
     LiveDocument.prototype.highlightDomElement = function (ids) {
@@ -266,9 +331,9 @@ define(function (require, exports, module) {
     };
     
     /**
-     * Redraw active highlights
+     * Redraw active highlights.
      */
-    LiveDocument.prototype.redraw = function () {
+    LiveDocument.prototype.redrawHighlights = function () {
         this.protocol.evaluate(this.getConnectionIds(), "_LD.redrawHighlights()");
     };
     

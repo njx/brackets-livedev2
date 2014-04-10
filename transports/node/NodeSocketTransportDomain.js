@@ -21,9 +21,7 @@
  * 
  */
 
-/*jslint vars: true, plusplus: true, devel: true, nomen: true, indent: 4,
-maxerr: 50, node: true */
-/*global */
+/*jslint vars: true, plusplus: true, devel: true, nomen: true, indent: 4, maxerr: 50, node: true */
 
 (function () {
     "use strict";
@@ -32,21 +30,54 @@ maxerr: 50, node: true */
         open = require("open"),
         _ = require("lodash");
     
-    var _wsServer,
-        _domainManager,
-        _nextClientId = 1,
-        _clients = {};
+    /**
+     * @private
+     * The WebSocket server we listen for incoming connections on.
+     * @type {?WebSocketServer}
+     */
+    var _wsServer;
+    
+    /**
+     * @private
+     * The Brackets domain manager for registering node extensions.
+     * @type {?DomainManager}
+     */
+    var _domainManager;
+    
+    /**
+     * @private
+     * The ID that should be allocated to the next client that connects to the transport.
+     * @type {number}
+     */
+    var _nextClientId = 1;
+    
+    /**
+     * @private
+     * A map of client IDs to the URL and WebSocket for the given ID.
+     * @type {Object.<number, {id: number, url: string, socket: WebSocket}>}
+     */
+    var _clients = {};
     
     // This must match the port declared in NodeSocketTransport.js.
     // TODO: randomize this?
     var SOCKET_PORT = 8123;
 
+    /**
+     * @private
+     * Returns the client info for a given WebSocket, or null if that socket isn't registered.
+     * @param {WebSocket} ws
+     * @return {?{id: number, url: string, socket: WebSocket}}
+     */
     function _clientForSocket(ws) {
         return _.find(_clients, function (client) {
             return (client.socket === ws);
         });
     }
     
+    /**
+     * @private
+     * Creates the WebSocketServer and handles incoming connections.
+     */
     function _createServer() {
         if (!_wsServer) {
             // TODO: make port configurable, or use random port
@@ -61,6 +92,10 @@ maxerr: 50, node: true */
                         console.error("nodeSocketTransport: Error parsing message: " + msg);
                         return;
                     }
+                    
+                    // See the comment in NodeSocketTransportRemote.connect() for why we have an extra
+                    // layer of transport-layer message objects surrounding the protocol messaging.
+
                     if (msgObj.type === "connect") {
                         if (!msgObj.url) {
                             console.error("nodeSocketTransport: Malformed connect message: " + msg);
@@ -101,12 +136,21 @@ maxerr: 50, node: true */
         }
     }
     
+    /**
+     * Initializes the socket server, then launches the given URL in the system default browser.
+     * @param {string} url
+     */
     function _cmdLaunch(url) {
         _createServer();
         open(url);
     }
     
-    function _cmdSend(idOrArray, msg) {
+    /**
+     * Sends a transport-layer message over the socket.
+     * @param {number|Array.<number>} idOrArray A client ID or array of client IDs to send the message to.
+     * @param {string} msgStr The message to send as a JSON string.
+     */
+    function _cmdSend(idOrArray, msgStr) {
         if (!Array.isArray(idOrArray)) {
             idOrArray = [idOrArray];
         }
@@ -115,16 +159,20 @@ maxerr: 50, node: true */
             if (!client) {
                 console.error("nodeSocketTransport: Couldn't find client ID: " + id);
             } else {
-                client.socket.send(msg);
+                client.socket.send(msgStr);
             }
         });
     }
     
-    function _cmdClose(id) {
-        var client = _clients[id];
+    /**
+     * Closes the connection for a given client ID.
+     * @param {number} clientId
+     */
+    function _cmdClose(clientId) {
+        var client = _clients[clientId];
         if (client) {
             client.socket.close();
-            delete _clients[id];
+            delete _clients[clientId];
         }
     }
     

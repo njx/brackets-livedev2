@@ -25,23 +25,22 @@
 /*global define, $, brackets, window, open */
 
 /**
- * TODO: update this
- * LiveDevelopment manages the Inspector, all Agents, and the active LiveDocument
+ * LiveDevelopment allows Brackets to launch a browser with a "live preview" that's
+ * connected to the current editor.
  *
  * # STARTING
  *
  * To start a session call `open`. This will read the currentDocument from brackets,
- * launch the LiveBrowser (currently Chrome) with the remote debugger port open,
- * establish the Inspector connection to the remote debugger, and finally load all
- * agents.
+ * launch it in the default browser, and connect to it for live editing.
  *
  * # STOPPING
  *
- * To stop a session call `close`. This will close the active browser window,
- * disconnect the Inspector, unload all agents, and clean up.
+ * To stop a session call `close`. This will close the connection to the browser
+ * (but will not close the browser tab).
  *
  * # STATUS
  *
+ * (TODO: some of these are likely obsolete in the new architecture)
  * Status updates are dispatched as `statusChange` jQuery events. The status
  * is passed as the first parameter and the reason for the change as the second
  * parameter. Currently only the "Inactive" status supports the reason parameter.
@@ -81,12 +80,9 @@ define(function (require, exports, module) {
         ExtensionUtils       = brackets.getModule("utils/ExtensionUtils"),
         FileSystemError      = brackets.getModule("filesystem/FileSystemError"),
         FileUtils            = brackets.getModule("file/FileUtils"),
-        NativeApp            = brackets.getModule("utils/NativeApp"),
         PreferencesDialogs   = brackets.getModule("preferences/PreferencesDialogs"),
         ProjectManager       = brackets.getModule("project/ProjectManager"),
         Strings              = brackets.getModule("strings"),
-        StringUtils          = brackets.getModule("utils/StringUtils"),
-        NodeDomain           = brackets.getModule("utils/NodeDomain"),
         _                    = brackets.getModule("thirdparty/lodash"),
         LiveDevServerManager = brackets.getModule("LiveDevelopment/LiveDevServerManager"),
         NodeSocketTransport  = require("transports/NodeSocketTransport"),
@@ -96,49 +92,73 @@ define(function (require, exports, module) {
     var LiveCSSDocument     = require("documents/LiveCSSDocument"),
         LiveHTMLDocument    = require("documents/LiveHTMLDocument");
     
-    /** @type {LiveHTMLDocument|LiveCSSDocument} */
+    /** 
+     * @private
+     * The live HTML document for the currently active preview.
+     * @type {LiveHTMLDocument} 
+     */
     var _liveDocument;
     
-    /** @type {Object.<string: {LiveHTMLDocument|LiveCSSDocument}>} */
+    /** 
+     * @private
+     * Live documents related to the active HTML document - for example, CSS files
+     * that are used by the document.
+     * TODO: this is not yet maintained in the new architecture - will need to be reimplemented.
+     * @type {Object.<string: {LiveHTMLDocument|LiveCSSDocument}>}
+     */
     var _relatedDocuments = {};
     
     /**
-     * Current transport for communicating with browser instances.
+     * @private
+     * Current transport for communicating with browser instances. See setTransport().
      * @type {{launch: function(string), send: function(number|Array.<number>, string), close: function(number)}}
-     *     The transport to use with communicating with the browser. Must provide "launch", "send" and "close" methods,
-     *     and trigger "connect", "message", and "close" events.
      */
     var _transport;
     
     /**
+     * @private
      * Protocol handler that provides the actual live development API on top of the current transport.
      */
     var _protocol = LiveDevProtocol;
     
     /**
+     * @private
      * Current live preview server
      * @type {BaseServer}
      */
     var _server;
     
+    /**
+     * @private
+     * Returns true if we think the given extension is for an HTML file.
+     * @param {string} ext The extension to check.
+     * @return {boolean} true if this is an HTML extension
+     */
     function _isHtmlFileExt(ext) {
         return (FileUtils.isStaticHtmlFileExt(ext) ||
                 (ProjectManager.getBaseUrl() && FileUtils.isServerHtmlFileExt(ext)));
     }
 
-    /** Get the current document from the document manager
-     * _adds extension, url and root to the document
+    /** 
+     * @private
+     * Get the current active document from the document manager.
+     * TODO: might no longer be necessary - there used to be more stuff in here but I think it was
+     * removed awhile ago.
+     * @return {?Document} The currently active document, or null for no document.
      */
     function _getCurrentDocument() {
         return DocumentManager.getCurrentDocument();
     }
 
-    /** Determine which document class should be used for a given document
-     * @param {Document} document
+    /** 
+     * @private
+     * Determine which live document class should be used for a given document
+     * @param {Document} document The document we want to create a live document for.
+     * @return {function} The constructor for the live document class; will be a subclass of LiveDocument.
      */
     function _classForDocument(doc) {
-        // TODO: this will require us to track stylesheets that are added and have support
-        // in the browser for replacing them
+        // TODO: not yet required in the prototype - this will only be called with CSS files
+        // once we start gathering related CSS documents. See "styleSheetAdded()" below.
 //        if (doc.getLanguage().getId() === "css") {
 //            return LiveCSSDocument;
 //        }
@@ -150,10 +170,19 @@ define(function (require, exports, module) {
         return null;
     }
     
+    /**
+     * Returns true if the global Live Development mode is on (might be in the middle of connecting).
+     * @return {boolean}
+     */
     function isActive() {
         return exports.status > STATUS_INACTIVE;
     }
-
+    
+    /**
+     * Returns the live document for a given path, or null if there is no live document for it.
+     * @param {string} path
+     * @return {?LiveDocument}
+     */
     function getLiveDocForPath(path) {
         if (!_server) {
             return undefined;
@@ -162,6 +191,11 @@ define(function (require, exports, module) {
         return _server.get(path);
     }
     
+    /**
+     * Returns the live document for a given editor, or null if there is no live document for it.
+     * @param {Editor} editor
+     * @return {?LiveDocument}
+     */
     function getLiveDocForEditor(editor) {
         if (!editor) {
             return null;
@@ -171,7 +205,8 @@ define(function (require, exports, module) {
 
     /**
      * @private
-     * Close a live document
+     * Close a live document.
+     * @param {LiveDocument}
      */
     function _closeDocument(liveDocument) {
         $(liveDocument).off(".livedev");
@@ -182,6 +217,8 @@ define(function (require, exports, module) {
      * Removes the given CSS/JSDocument from _relatedDocuments. Signals that the
      * given file is no longer associated with the HTML document that is live (e.g.
      * if the related file has been deleted on disk).
+     * @param {$.Event} event
+     * @param {LiveDocument} liveDoc
      */
     function _handleRelatedDocumentDeleted(event, liveDoc) {
         if (_relatedDocuments[liveDoc.doc.url]) {
@@ -215,7 +252,7 @@ define(function (require, exports, module) {
 
     /**
      * @private
-     * Close all live documents
+     * Close all live documents.
      */
     function _closeDocuments() {
         if (_liveDocument) {
@@ -234,16 +271,23 @@ define(function (require, exports, module) {
         }
     }
     
+    /**
+     * @private
+     * Returns the URL that we would serve the given path at.
+     * @param {string} path
+     * @return {string}
+     */
     function _resolveUrl(path) {
         return _server && _server.pathToUrl(path);
     }
 
     /**
      * @private
-     * Create a live version of a Brackets document
+     * Create a LiveDocument for a Brackets editor/document to manage communication between the
+     * editor and the browser.
      * @param {Document} doc
      * @param {Editor} editor
-     * @return {?(LiveHTMLDocument|LiveCSSDocument)}
+     * @return {?LiveDocument} The live document, or null if this type of file doesn't support live editing.
      */
     function _createLiveDocument(doc, editor) {
         var DocClass        = _classForDocument(doc),
@@ -262,9 +306,11 @@ define(function (require, exports, module) {
         return liveDocument;
     }
 
-    /** Documents are considered to be out-of-sync if they are dirty and
-     *  do not have "update while editing" support
+    /** 
+     * Documents are considered to be out-of-sync if they are dirty and
+     * do not have "update while editing" support
      * @param {Document} doc
+     * @return {boolean}
      */
     function _docIsOutOfSync(doc) {
         var docClass    = _classForDocument(doc),
@@ -274,16 +320,24 @@ define(function (require, exports, module) {
         return doc.isDirty && !isLiveEditingEnabled;
     }
 
-/*
+    /**
+     * Handles a notification from the browser that a stylesheet was loaded into
+     * the live HTML document. If the stylesheet maps to a file in the project, then
+     * creates a live document for the stylesheet and adds it to _relatedDocuments.
+     * TODO: this isn't implemented in the prototype yet. We'll need to implement
+     * this notification on the browser side.
+     * @param {$.Event} event
+     * @param {string} url The URL of the stylesheet that was added.
+     */
     function _styleSheetAdded(event, url) {
         var path = _server && _server.urlToPath(url),
-            exists = !!_relatedDocuments[url];
+            alreadyAdded = !!_relatedDocuments[url];
 
         // path may be null if loading an external stylesheet.
         // Also, the stylesheet may already exist and be reported as added twice
         // due to Chrome reporting added/removed events after incremental changes
         // are pushed to the browser
-        if (!path || exists) {
+        if (!path || alreadyAdded) {
             return;
         }
 
@@ -302,7 +356,6 @@ define(function (require, exports, module) {
             }
         });
     }
-*/
 
     /**
      * @private
@@ -428,30 +481,6 @@ define(function (require, exports, module) {
 
     /**
      * @private
-     * While still connected to the Inspector, do cleanup for agents,
-     * documents and server.
-     * @param {boolean} doCloseWindow Use true to close the window/tab in the browser
-     * @return {jQuery.Promise} A promise that is always resolved
-     */
-    function _doInspectorDisconnect(doCloseWindow) {
-        var closePromise;
-
-        // Close live documents 
-        _closeDocuments();
-        
-        if (_server) {
-            // Stop listening for requests when disconnected
-            _server.stop();
-
-            // Dispose server
-            _server = null;
-        }
-        
-        // TODO: send message to browser page to close itself
-    }
-    
-    /**
-     * @private
      * Close the connection and the associated window
      * @param {boolean} doCloseWindow Use true to close the window/tab in the browser
      * @param {?string} reason Optional string key suffix to display to user (see LIVE_DEV_* keys)
@@ -470,9 +499,9 @@ define(function (require, exports, module) {
             }
         }
 
-        if (doCloseWindow) {
-            // TODO: don't have a way to do this in the new architecture
-        }
+        // TODO: don't have a way to close windows in the new architecture
+//        if (doCloseWindow) {
+//        }
         
         _setStatus(STATUS_INACTIVE, reason || "explicit_close");
     }
@@ -485,6 +514,10 @@ define(function (require, exports, module) {
         return _close(true);
     }
     
+    /**
+     * @private
+     * Displays an error when no HTML file can be found to preview.
+     */
     function _showWrongDocError() {
         Dialogs.showModalDialog(
             DefaultDialogs.DIALOG_ID_ERROR,
@@ -493,6 +526,10 @@ define(function (require, exports, module) {
         );
     }
 
+    /**
+     * @private
+     * Displays an error when the server for live development files can't be started.
+     */
     function _showLiveDevServerNotReadyError() {
         Dialogs.showModalDialog(
             DefaultDialogs.DIALOG_ID_ERROR,
@@ -501,6 +538,12 @@ define(function (require, exports, module) {
         );
     }
 
+    /**
+     * @private
+     * Creates the main live document for a given HTML document and notifies the server it exists.
+     * TODO: we should really maintain the list of live documents, not the server.
+     * @param {Document} doc
+     */
     function _createLiveDocumentForFrame(doc) {
         // create live document
         doc._ensureMasterEditor();
@@ -508,6 +551,12 @@ define(function (require, exports, module) {
         _server.add(_liveDocument);
     }
     
+    /**
+     * @private
+     * Launches the given document in the browser, given that a live document has already
+     * been created for it. 
+     * @param {Document} doc
+     */
     function _open(doc) {
         if (doc && _liveDocument && doc === _liveDocument.doc) {
             if (_server) {
@@ -533,8 +582,16 @@ define(function (require, exports, module) {
         }
     }
     
-    // helper function that actually does the launch once we are sure we have
-    // a doc and the server for that doc is up and running.
+    /**
+     * @private
+     * Creates the live document in preparation for launching the 
+     * preview of the given document, then launches it. (The live document 
+     * must already exist before we launch it so that the server can
+     * ask it for the instrumented version of the document when the browser 
+     * requests it.)
+     * TODO: could probably just consolidate this with _open()
+     * @param {Document} doc
+     */
     function _doLaunchAfterServerReady(initialDoc) {
         // update status
         _setStatus(STATUS_CONNECTING);
@@ -547,6 +604,13 @@ define(function (require, exports, module) {
         _open(initialDoc);
     }
     
+    /**
+     * @private
+     * Create the server in preparation for opening a live preview.
+     * @param {Document} doc The document we want the server for. Different servers handle
+     * different types of project (a static server for when no app server is configured,
+     * vs. a user server when there is an app server set in File > Project Settings).
+     */
     function _prepareServer(doc) {
         var deferred = new $.Deferred(),
             showBaseUrlPrompt = false;
@@ -589,7 +653,7 @@ define(function (require, exports, module) {
     }
 
     /**
-     * Open the Connection and go live
+     * Open a live preview on the current docuemnt.
      */
     function open() {
         // TODO: need to run _onDocumentChange() after load if doc != currentDocument here? Maybe not, since activeEditorChange
@@ -620,12 +684,12 @@ define(function (require, exports, module) {
     
     /**
      * @private
-     * DocumentManager currentDocumentChange event handler. 
+     * When switching documents, close the current preview and open a new one.
+     * TODO: closing the current preview doesn't actually work in the new architecture.
      */
     function _onDocumentChange() {
-        // TODO: only if live development is toggled on        
         var doc = _getCurrentDocument();
-        if (!doc) {
+        if (!isActive() || !doc) {
             return;
         }
         
@@ -648,7 +712,9 @@ define(function (require, exports, module) {
     }
 
     /**
-     * Triggered by a documentSaved event from DocumentManager.
+     * For files that don't support as-you-type live editing, but are loaded by live HTML documents
+     * (e.g. JS files), we want to reload the full document when they're saved.
+     * TODO: not implemented, see below.
      * @param {$.Event} event
      * @param {Document} doc
      */
@@ -666,27 +732,41 @@ define(function (require, exports, module) {
             return;
         }
         
-        var documentUrl     = _server.pathToUrl(absolutePath);
-        // TODO: send message to browser to reload the document
+        // TODO: check if the given document was requested by the live HTML document,
+        // and if so, reload the page. We used to track this via a CDT event that would fire
+        // whenever the browser was about to make another request. We should figure out whether
+        // we can/want to implement this the same way (by trying to detect when requests are made
+        // from the browser itself and dispatching an event over the protocol), or just try to
+        // detect it on our side by seeing what files the server serves up. (If we allow multiple
+        // documents to be live previewed at once, we'd need to match up the files being
+        // served with their associated main documents, probably via the referrer.)
     }
 
-    /** Triggered by a change in dirty flag from the DocumentManager */
+    /** 
+     * For files that don't support as-you-type live editing, but are loaded by live HTML documents
+     * (e.g. JS files), we want to show a dirty indicator on the live development icon when they
+     * have unsaved changes, so the user knows s/he needs to save in order to have the page reload.
+     * @param {$.Event} event
+     * @param {Document} doc
+     */
     function _onDirtyFlagChange(event, doc) {
-        // TODO: only if this is a dependent file (e.g. a stylesheet)
-        if (doc) {
-            // Set status to out of sync if dirty. Otherwise, set it to active status.
-            _setStatus(_docIsOutOfSync(doc) ? STATUS_OUT_OF_SYNC : STATUS_ACTIVE);
-        }
+        // TODO: only want to do this if the document was requested - same logic as in _onDocumentSaved.
+//        if (doc) {
+//            // Set status to out of sync if dirty. Otherwise, set it to active status.
+//            _setStatus(_docIsOutOfSync(doc) ? STATUS_OUT_OF_SYNC : STATUS_ACTIVE);
+//        }
     }
 
-    function getCurrentProjectServerConfig() {
-        return {
-            baseUrl: ProjectManager.getBaseUrl(),
-            pathResolver: ProjectManager.makeProjectRelativeIfPossible,
-            root: ProjectManager.getProjectRoot().fullPath
-        };
-    }
-    
+    // TODO: These aren't necessary in the prototype because they're related to servers that are
+    // registered by the original LiveDevelopment feature when it starts up.
+//    function getCurrentProjectServerConfig() {
+//        return {
+//            baseUrl: ProjectManager.getBaseUrl(),
+//            pathResolver: ProjectManager.makeProjectRelativeIfPossible,
+//            root: ProjectManager.getProjectRoot().fullPath
+//        };
+//    }
+//    
 //    function _createUserServer() {
 //        return new UserServer(getCurrentProjectServerConfig());
 //    }
@@ -695,11 +775,37 @@ define(function (require, exports, module) {
 //        return new FileServer(getCurrentProjectServerConfig());
 //    }
 
+    /**
+     * Sets the current transport mechanism to be used by the live development protocol
+     * (e.g. socket server, iframe postMessage, etc.)
+     * @param {{launch: function(string), send: function(number|Array.<number>, string), close: function(number), getRemoteScript: function(): ?string}} transport
+     *      The low-level transport. Must provide the following methods:
+     *
+     *      launch(url): Opens the url in the target browser.
+     *      send(idOrArray, string): Dispatches the given protocol message (provided as a JSON string) to the given client ID
+     *          or array of client IDs. (See the "connect" message for an explanation of client IDs.)
+     *      close(id): Closes the connection to the given client ID.
+     *      getRemoteScript(): Returns a script that should be injected into the page's HTML in order to handle the remote side
+     *          of the transport. Should include the "<script>" tags. Should return null if no injection is necessary.
+     *
+     *      It must also dispatch the following jQuery events:
+     *
+     *      "connect": When a target browser connects back to the transport. Must provide two parameters: 
+     *          clientID - a unique number representing this connection
+     *          url - the URL of the page in the target browser that's connecting to us
+     *      "message": When a message is received by the transport. Must provide two parameters:
+     *          clientID - the ID of the client sending the message
+     *          message - the text of the message as a JSON string
+     *      "close": When the remote browser closes the connection. Must provide one parameter:
+     *          clientID - the ID of the client closing the connection
+     */
     function setTransport(transport) {
         _protocol.setTransport(transport);
     }
 
-    /** Initialize the LiveDevelopment Session */
+    /**
+     * Initialize the LiveDevelopment module.
+     */
     function init() {
         $(DocumentManager).on("currentDocumentChange", _onDocumentChange)
             .on("documentSaved", _onDocumentSaved)
@@ -718,10 +824,22 @@ define(function (require, exports, module) {
         _setStatus(STATUS_INACTIVE);
     }
 
+    /**
+     * @private
+     * Returns the current server being used to serve the active live document. Will be null
+     * if there is no active live document.
+     * @return {?BaseServer}
+     */
     function _getServer() {
         return _server;
     }
 
+    /**
+     * @private
+     * Returns the base URL of the current server serving the active live document, or null if
+     * there is no active live document.
+     * @return {?string}
+     */
     function getServerBaseUrl() {
         return _server && _server.getBaseUrl();
     }
@@ -736,7 +854,7 @@ define(function (require, exports, module) {
     exports.getLiveDocForPath   = getLiveDocForPath;
     exports.init                = init;
     exports.isActive            = isActive;
-    exports.getCurrentProjectServerConfig = getCurrentProjectServerConfig;
+//    exports.getCurrentProjectServerConfig = getCurrentProjectServerConfig;
     exports.getServerBaseUrl    = getServerBaseUrl;
     exports.setTransport        = setTransport;
 });

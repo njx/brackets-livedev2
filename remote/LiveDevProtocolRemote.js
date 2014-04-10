@@ -25,11 +25,16 @@
 
 // This is the script that Brackets live development injects into HTML pages in order to
 // establish and maintain the live development socket connection. Note that Brackets may
-// also inject other scripts via simple "eval" once this has connected back to Brackets.
+// also inject other scripts via "evaluate" once this has connected back to Brackets.
 
 (function (global) {
     "use strict";
     
+    // This protocol handler assumes that there is also an injected transport script that
+    // has the following methods:
+    //     setCallbacks(obj) - a method that takes an object with a "message" callback that
+    //         will be called with the message string whenever a message is received by the transport.
+    //     send(msgStr) - sends the given message string over the transport.
     var transport = global._Brackets_LiveDev_Transport;
     
     var ProtocolHandler = {

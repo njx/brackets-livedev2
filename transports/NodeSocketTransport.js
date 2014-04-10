@@ -24,37 +24,49 @@
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, indent: 4, forin: true, maxerr: 50, regexp: true */
 /*global define, $, brackets, window, open */
 
+// This transport provides a WebSocket connection between Brackets and a live browser preview.
+// This is just a thin wrapper around the Node extension (NodeSocketTransportDomain) that actually
+// provides the WebSocket server and handles the communication. We also rely on an injected script in
+// the browser for the other end of the transport.
+
 define(function (require, exports, module) {
     "use strict";
     
     var ExtensionUtils = brackets.getModule("utils/ExtensionUtils"),
-        NodeDomain = brackets.getModule("utils/NodeDomain"),
-        NodeSocketTransportRemote = require("text!transports/remote/NodeSocketTransportRemote.js");
+        NodeDomain = brackets.getModule("utils/NodeDomain");
+    
+    // The script that will be injected into the previewed HTML to handle the other side of the socket connection.
+    var NodeSocketTransportRemote = require("text!transports/remote/NodeSocketTransportRemote.js");
 
+    // The node extension that actually provides the WebSocket server.
     var NodeSocketTransportDomain = new NodeDomain("nodeSocketTransport", ExtensionUtils.getModulePath(module, "node/NodeSocketTransportDomain"));
     
     // This must match the port declared in NodeSocketTransportDomain.js.
     // TODO: randomize this?
     var SOCKET_PORT = 8123;
     
+    /**
+     * Returns the script that should be injected into the browser to handle the other end of the transport.
+     * @return {string}
+     */
     function getRemoteScript() {
         return "<script>\n" +
             NodeSocketTransportRemote +
             "this._Brackets_LiveDev_Socket_Transport_URL = 'ws://localhost:" + SOCKET_PORT + "';\n" +
             "</script>\n";
     }
+
+    // Events
     
-    function _init() {
-        ["connect", "message", "close"].forEach(function (type) {
-            $(NodeSocketTransportDomain).on(type, function () {
-                console.log("NodeSocketTransport - event - " + type + " - " + JSON.stringify(Array.prototype.slice.call(arguments, 1)));
-                // Remove the event object from the argument list.
-                $(exports).triggerHandler(type, Array.prototype.slice.call(arguments, 1));
-            });
+    // We can simply retrigger the events we receive from the node domain directly, since they're in
+    // the same format expected by clients of the transport.
+    ["connect", "message", "close"].forEach(function (type) {
+        $(NodeSocketTransportDomain).on(type, function () {
+            console.log("NodeSocketTransport - event - " + type + " - " + JSON.stringify(Array.prototype.slice.call(arguments, 1)));
+            // Remove the event object from the argument list.
+            $(exports).triggerHandler(type, Array.prototype.slice.call(arguments, 1));
         });
-    }
-    
-    _init();
+    });
     
     // Exports
     

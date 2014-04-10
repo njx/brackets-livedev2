@@ -15,14 +15,15 @@ Lots:
 * Switching files in Brackets opens a new tab. This is partly FOL due to closing live dev not closing the window in the browser. We should consider changing the workflow to allow multiple files to be previewed anyway (rather than only having a single preview that changes as you switch files in Brackets).
 * I wanted to change up how the Server stuff worked, but it turned out not to be necessary for the prototype and it might just be orthogonal.
 * Still needs a fair amount of code cleanup and documentation
+* No unit tests (the original Live Dev tests would need to be completely rewritten - and ideally in a more granular fashion with mocks)
 
 Bugs/cleanup/TODO:
 
 * Lightning bolt status is wrong - never turns off. Haven't thought through how we should indicate in the UI when multiple browser clients are active, and whether we should turn the lightning bolt off when the last one disconnects - this might also change if we change the workflow to allow multiple files to be previewed
 * Doesn't show an error if the browser never connects back
+* highlighting sometimes flickers, sometimes turns off
 * spurious errors when socket is closed
 * hard-coded port number for WebSocket server (might be fine)
-* _ prefixing of private members isn't consistent; other code style cleanup
 * Lots of TODOs in the code
 * Probably lots of other bugs
 
