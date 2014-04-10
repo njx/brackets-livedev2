@@ -26,7 +26,11 @@
 /*global define, $, brackets */
 
 /**
- * LiveHTMLDocument manages a single HTML source document
+ * LiveHTMLDocument manages a single HTML source document. Edits to the HTML are applied live in
+ * the browser, and the DOM node corresponding to the selection is highlighted.
+ *
+ * LiveHTMLDocument relies on HTMLInstrumentation in order to map tags in the HTML source text
+ * to DOM nodes in the browser, so edits can be incrementally applied.
  */
 define(function (require, exports, module) {
     "use strict";
@@ -39,9 +43,15 @@ define(function (require, exports, module) {
         HTMLInstrumentation = require("language/HTMLInstrumentation");
 
     /**
-     * Constructor
-     * @param {!DocumentManager.Document} doc the source document from Brackets
-     * @param {editor=} editor
+     * @constructor
+     * @see LiveDocument
+     * @param {LiveDevProtocol} protocol The protocol to use for communicating with the browser.
+     * @param {function(string): string} urlResolver A function that, given a path on disk, should return
+     *     the URL that Live Development serves that path at.
+     * @param {Document} doc The Brackets document that this live document is connected to.
+     * @param {?Editor} editor If specified, a particular editor that this live document is managing.
+     *     If not specified initially, the LiveDocument will connect to the editor for the given document
+     *     when it next becomes the active editor.
      */
     function LiveHTMLDocument(protocol, urlResolver, doc, editor) {
         LiveDocument.apply(this, arguments);
@@ -56,6 +66,14 @@ define(function (require, exports, module) {
     LiveHTMLDocument.prototype.constructor = LiveHTMLDocument;
     LiveHTMLDocument.prototype.parentClass = LiveDocument.prototype;
     
+    /**
+     * @private
+     * Handles a connection from a browser page. Injects the RemoteFunctions script via the
+     * live development protocol in order to provide highlighting and live DOM editing functionality.
+     * @param {$.Event} event
+     * @param {number} clientId
+     * @param {string} url
+     */
     LiveHTMLDocument.prototype._onConnect = function (event, clientId, url) {
         var self = this;
         
@@ -77,10 +95,23 @@ define(function (require, exports, module) {
     };
     
     /**
-     * Enable instrumented HTML
-     * @param enabled {boolean} 
+     * @override
+     * Returns true if document edits appear live in the connected browser.
+     * @return {boolean} 
      */
-    LiveHTMLDocument.prototype.setInstrumentationEnabled = function setInstrumentationEnabled(enabled) {
+    LiveHTMLDocument.prototype.isLiveEditingEnabled = function () {
+        return this._instrumentationEnabled;
+    };
+    
+    /**
+     * @override
+     * Called to turn instrumentation on or off for this file. Triggered by being
+     * requested from the browser. 
+     * TODO: this doesn't seem necessary...if we're a live document, we should
+     * always have instrumentation on anyway.
+     * @param {boolean} enabled
+     */
+    LiveHTMLDocument.prototype.setInstrumentationEnabled = function (enabled) {
         if (!this.editor) {
             // TODO: error
             return;
@@ -96,18 +127,10 @@ define(function (require, exports, module) {
     };
     
     /**
-     * Returns true if document edits appear live in the connected browser
-     * @return {boolean} 
+     * Returns the instrumented version of the file. 
+     * @returns {{body: string}}
      */
-    LiveHTMLDocument.prototype.isLiveEditingEnabled = function () {
-        return this._instrumentationEnabled;
-    };
-    
-    /**
-     * Returns a JSON object with HTTP response overrides
-     * @return {{body: string}}
-     */
-    LiveHTMLDocument.prototype.getResponseData = function getResponseData(enabled) {
+    LiveHTMLDocument.prototype.getResponseData = function (enabled) {
         var body;
         if (this._instrumentationEnabled) {
             body = HTMLInstrumentation.generateInstrumentedHTML(this.editor, this.protocol.getRemoteScript());
@@ -118,22 +141,26 @@ define(function (require, exports, module) {
         };
     };
 
-    /** Close the document */
-    LiveHTMLDocument.prototype.close = function close() {
+    /**
+     * @override
+     * Closes the live document, terminating its connection to the browser.
+     */
+    LiveHTMLDocument.prototype.close = function () {
         $(this.doc).off("change", this._onChange);
         this.parentClass.close.call(this);
     };
     
-    /** Update the highlight */
+    /**
+     * @override
+     * Update the highlights in the browser based on the cursor position.
+     */
     LiveHTMLDocument.prototype.updateHighlight = function () {
-        if (!this.editor) {
+        if (!this.editor || !this.isHighlightEnabled) {
             return;
         }
         var editor = this.editor,
             codeMirror = editor._codeMirror,
             ids = [];
-        // TODO: only if highlighting enabled
-        //if (Inspector.config.highlight) {
         _.each(this.editor.getSelections(), function (sel) {
             var tagID = HTMLInstrumentation._getTagIDAtDocumentPos(
                 editor,
@@ -149,17 +176,8 @@ define(function (require, exports, module) {
         } else {
             this.highlightDomElement(ids);
         }
-        //}
     };
 
-    /** Triggered on cursor activity by the editor */
-    LiveHTMLDocument.prototype._onCursorActivity = function (event, editor) {
-        if (!this.editor) {
-            return;
-        }
-        this.updateHighlight();
-    };
-    
     /**
      * @private
      * For the given editor change, compare the resulting browser DOM with the
@@ -206,7 +224,13 @@ define(function (require, exports, module) {
 //        });
     };
 
-    /** Triggered on change by the editor */
+    /**
+     * @private
+     * Handles edits to the document. Determines what's changed in the source and sends DOM diffs to the browser.
+     * @param {$.Event} event
+     * @param {Document} doc
+     * @param {Object} change
+     */
     LiveHTMLDocument.prototype._onChange = function (event, doc, change) {
         // Make sure LiveHTML is turned on
         if (!this._instrumentationEnabled) {
@@ -227,7 +251,6 @@ define(function (require, exports, module) {
             applyEditsPromise;
         
         if (result.edits) {
-            // TODO: eval in browser
             applyEditsPromise = this.protocol.evaluate(this.getConnectionIds(), "_LD.applyDOMEdits(" + JSON.stringify(result.edits) + ")");
     
             applyEditsPromise.always(function () {

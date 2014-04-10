@@ -30,14 +30,12 @@
  *
  * # EDITING
  *
- * Editing the document will cause the style sheet to be reloaded via the
- * CSSAgent, which immediately updates the appearance of the rendered document.
+ * Editing the document will cause the style sheet to be reloaded in the browser,
+ * which immediately updates the appearance of the rendered document.
  *
  * # HIGHLIGHTING
  *
- * LiveCSSDocument supports highlighting nodes from the HighlightAgent and
- * highlighting all DOMNode corresponding to the rule at the cursor position
- * in the editor.
+ * DOM nodes corresponding to the rule at the current cursor position are highlighted.
  *
  * # EVENTS
  *
@@ -53,9 +51,16 @@ define(function LiveCSSDocumentModule(require, exports, module) {
         EditorManager   = brackets.getModule("editor/EditorManager"),
         LiveDocument    = require("documents/LiveDocument");
 
-    /** Constructor
-     *
-     * @param Document the source document from Brackets
+    /** 
+     * @constructor
+     * @see LiveDocument
+     * @param {LiveDevProtocol} protocol The protocol to use for communicating with the browser.
+     * @param {function(string): string} urlResolver A function that, given a path on disk, should return
+     *     the URL that Live Development serves that path at.
+     * @param {Document} doc The Brackets document that this live document is connected to.
+     * @param {?Editor} editor If specified, a particular editor that this live document is managing.
+     *     If not specified initially, the LiveDocument will connect to the editor for the given document
+     *     when it next becomes the active editor.
      */
     var LiveCSSDocument = function LiveCSSDocument(protocol, urlResolver, doc, editor) {
         LiveDocument.apply(this, arguments);
@@ -75,29 +80,21 @@ define(function LiveCSSDocumentModule(require, exports, module) {
 
     /**
      * @private
-     * Get the CSSStyleSheetHeader for this document
+     * Returns information about the associated style block in the browser, including a
+     * unique ID.
      */
     LiveCSSDocument.prototype._getStyleSheetHeader = function () {
-        // TODO
+        // TODO Need to add protocol API for getting a stylesheet ID, or
+        // decide to just refer to them by URL.
         //return CSSAgent.styleForURL(this.doc.url);
-    };
-
-    /**
-     * @deprecated
-     * CSSStyleSheetBody was removed in protocol 1.1. This method is unused in Brackets 36.
-     * Get the browser version of the StyleSheet object
-     * @return {jQuery.promise}
-     */
-    LiveCSSDocument.prototype.getStyleSheetFromBrowser = function getStyleSheetFromBrowser() {
-        return new $.Deferred().reject().promise();
     };
 
     /**
      * Get the browser version of the source
      * @return {jQuery.promise} Promise resolved with the text content of this CSS document
      */
-    LiveCSSDocument.prototype.getSourceFromBrowser = function getSourceFromBrowser() {
-        // TODO: used for unit testing, need to be able to extract stylesheet from browser side
+    LiveCSSDocument.prototype.getSourceFromBrowser = function () {
+        // TODO: Only used for unit testing. Need to add protocol API to extract stylesheet from browser side.
 //        var deferred = new $.Deferred(),
 //            styleSheetId = this._getStyleSheetHeader().styleSheetId,
 //            inspectorPromise = Inspector.CSS.getStyleSheetText(styleSheetId);
@@ -109,8 +106,11 @@ define(function LiveCSSDocumentModule(require, exports, module) {
 //        return deferred.promise();
     };
  
-    /** Close the document */
-    LiveCSSDocument.prototype.close = function close() {
+    /**
+     * @override
+     * Closes the live document, terminating its connection to the browser.
+     */
+    LiveCSSDocument.prototype.close = function () {
         $(this.doc).off(".LiveCSSDocument");
         this.doc.releaseRef();
         this.parentClass.close.call(this);
@@ -118,21 +118,22 @@ define(function LiveCSSDocumentModule(require, exports, module) {
 
     /**
      * @private
-     * Update the style sheet text content and redraw highlights
+     * When the user edits the file, update the stylesheet in the browser and redraw highlights.
      */
     LiveCSSDocument.prototype._updateBrowser = function () {
-        // TODO
+        // TODO Need to add protocol API to replace associated stylesheet at runtime with the current
+        // text of the document.
         //var reloadPromise = CSSAgent.reloadCSSForDocument(this.doc);
 
-        // TODO only if highlighting is on
-        //if (Inspector.config.highlight) {
-        //reloadPromise.done(HighlightAgent.redraw);
-        //}
+        this.redrawHighlights();
     };
 
+    /**
+     * @override
+     * Update the highlights in the browser based on the cursor position.
+     */
     LiveCSSDocument.prototype.updateHighlight = function () {
-        // TODO only if highlighting is on
-        if (this.editor) {
+        if (this.isHighlightEnabled() && this.editor) {
             var editor = this.editor,
                 codeMirror = editor._codeMirror,
                 selectors = [];
@@ -151,43 +152,35 @@ define(function LiveCSSDocumentModule(require, exports, module) {
     };
     
     /**
-     * Enable instrumented CSS
-     * @param enabled {boolean} 
-     */
-    LiveCSSDocument.prototype.setInstrumentationEnabled = function setInstrumentationEnabled(enabled) {
-        // no-op
-        // "Instrumentation" is always enabled for CSS, we make no modifications
-    };
-    
-    /**
-     * Returns true if document edits appear live in the connected browser
+     * @override
+     * Returns true if document edits appear live in the connected browser.
      * @return {boolean} 
      */
     LiveCSSDocument.prototype.isLiveEditingEnabled = function () {
         return true;
     };
-    
-    /**
-     * Returns a JSON object with HTTP response overrides
-     * @returns {{body: string}}
-     */
-    LiveCSSDocument.prototype.getResponseData = function getResponseData(enabled) {
-        return {
-            body: this.doc.getText()
-        };
-    };
-
+ 
     /** Event Handlers *******************************************************/
 
-    /** Triggered whenever the Document is edited */
-    LiveCSSDocument.prototype.onChange = function onChange(event, editor, change) {
+    /**
+     * @private
+     * Handles edits to the document. Updates the stylesheet in the browser.
+     * @param {$.Event} event
+     * @param {Editor} editor
+     * @param {Object} change
+     */
+    LiveCSSDocument.prototype.onChange = function (event, editor, change) {
         this._updateBrowser();
     };
 
-    /** Triggered if the Document's file is deleted */
-    LiveCSSDocument.prototype.onDeleted = function onDeleted(event, editor, change) {
-        // TODO
-        // clear the CSS
+    /** 
+     * @private
+     * Handles when the associated CSS document is deleted on disk. Removes the
+     * stylesheet from the browser and shuts down the live document.
+     * @param {$.Event} event
+     */
+    LiveCSSDocument.prototype.onDeleted = function (event) {
+        // TODO Need to add protocol API to remove the stylesheet from the document.
         //CSSAgent.clearCSSForDocument(this.doc);
 
         // shut down, since our Document is now dead

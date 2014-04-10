@@ -92,7 +92,7 @@ define(function (require, exports, module) {
     }
     
     /**
-     * Closes the document, terminating its connection to the browser.
+     * Closes the live document, terminating its connection to the browser.
      */
     LiveDocument.prototype.close = function () {
         var self = this;
@@ -107,9 +107,42 @@ define(function (require, exports, module) {
         this._detachFromEditor();
         $(EditorManager).off("activeEditorChange", this._onActiveEditorChange);
         PreferencesManager.stateManager.getPreference("livedev2.highlight")
-            .on("change", this._onHighlightPrefChange);
+            .off("change", this._onHighlightPrefChange);
     };
     
+    /**
+     * Returns true if document edits appear live in the connected browser.
+     * Should be overridden by subclasses.
+     * @return {boolean} 
+     */
+    LiveDocument.prototype.isLiveEditingEnabled = function () {
+        return false;
+    };
+    
+    /**
+     * Called to turn instrumentation on or off for this file. Triggered by being
+     * requested from the browser. Should be implemented by subclasses if instrumentation
+     * is necessary for the subclass's document type.
+     * TODO: this doesn't seem necessary...if we're a live document, we should
+     * always have instrumentation on anyway.
+     * @param {boolean} enabled
+     */
+    LiveDocument.prototype.setInstrumentationEnabled = function (enabled) {
+        // Does nothing in base class.
+    };
+    
+    /**
+     * Returns the instrumented version of the file. By default, just returns
+     * the document text. Should be overridden by subclasses for cases if instrumentation
+     * is necessary for the subclass's document type.
+     * @returns {{body: string}}
+     */
+    LiveDocument.prototype.getResponseData = function (enabled) {
+        return {
+            body: this.doc.getText()
+        };
+    };
+
     /**
      * Returns an array of the client IDs that are being managed by this live document.
      * @return {Array.<number>}
@@ -123,7 +156,7 @@ define(function (require, exports, module) {
      * Handles changes to the "Live Highlight" preference, switching it on/off in the browser as appropriate.
      */
     LiveDocument.prototype._onHighlightPrefChange = function () {
-        if (PreferencesManager.getViewState("livedev2.highlight")) {
+        if (this.isHighlightEnabled()) {
             this.updateHighlight();
         } else {
             this.hideHighlight();
@@ -278,6 +311,14 @@ define(function (require, exports, module) {
     };
     
     /**
+     * Returns true if we should be highlighting.
+     * @return {boolean}
+     */
+    LiveDocument.prototype.isHighlightEnabled = function () {
+        return PreferencesManager.getViewState("livedev2.highlight");
+    };
+    
+    /**
      * Called when the highlight in the browser should be updated because the user has
      * changed the selection. Does nothing in base class, should be implemented by subclasses
      * that implement highlighting functionality.
@@ -288,9 +329,13 @@ define(function (require, exports, module) {
     
     /**
      * Hides the current highlight in the browser.
+     * @param {boolean=} temporary If true, this isn't a change of state - we're just about
+     *     to re-highlight.
      */
-    LiveDocument.prototype.hideHighlight = function () {
-        this._lastHighlight = null;
+    LiveDocument.prototype.hideHighlight = function (temporary) {
+        if (!temporary) {
+            this._lastHighlight = null;
+        }
         this.protocol.evaluate(this.getConnectionIds(), "_LD.hideHighlight()");
     };
 
@@ -304,7 +349,6 @@ define(function (require, exports, module) {
             return;
         }
         this._lastHighlight = name;
-        this.hideHighlight();
         this.protocol.evaluate(this.getConnectionIds(), "_LD.highlightRule(" + JSON.stringify(name) + ")");
     };
     
@@ -334,7 +378,9 @@ define(function (require, exports, module) {
      * Redraw active highlights.
      */
     LiveDocument.prototype.redrawHighlights = function () {
-        this.protocol.evaluate(this.getConnectionIds(), "_LD.redrawHighlights()");
+        if (this.isHighlightEnabled()) {
+            this.protocol.evaluate(this.getConnectionIds(), "_LD.redrawHighlights()");
+        }
     };
     
     module.exports = LiveDocument;
