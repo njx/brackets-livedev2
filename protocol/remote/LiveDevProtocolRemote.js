@@ -37,7 +37,15 @@
     //     send(msgStr) - sends the given message string over the transport.
     var transport = global._Brackets_LiveDev_Transport;
     
+    /**
+     * The remote handler for the protocol.
+     */
     var ProtocolHandler = {
+        /**
+         * Handles a message from the transport. Parses it as JSON and looks at the
+         * "method" field to determine what the action is.
+         * @param {msgStr} string The protocol message as stringified JSON.
+         */
         message: function (msgStr) {
             console.log("received: " + msgStr);
             var msg = JSON.parse(msgStr);
@@ -53,6 +61,12 @@
             }
         },
         
+        /**
+         * Responds to a message, setting the response message's ID to the same ID as the
+         * original request.
+         * @param {Object} orig The original message object.
+         * @param {Object} response The response message object.
+         */
         respond: function (orig, response) {
             response.id = orig.id;
             transport.send(JSON.stringify(response));
