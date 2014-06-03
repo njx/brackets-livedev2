@@ -175,6 +175,15 @@ define(function (require, exports, module) {
         );
     }
     
+    function getRelated(clients, script) {
+        return _send(
+            clients,
+            {
+                method: "Document.getRelated",
+                params: {}
+            }
+        );
+    }
     /**
      * Closes the connection to the given client. Proxies to the transport.
      * @param {number} clientId
@@ -187,5 +196,6 @@ define(function (require, exports, module) {
     exports.getRemoteScript = getRemoteScript;
     exports.launch = launch;
     exports.evaluate = evaluate;
+    exports.getRelated = getRelated;
     exports.close = close;
 });

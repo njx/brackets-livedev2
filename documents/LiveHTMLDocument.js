@@ -57,6 +57,10 @@ define(function (require, exports, module) {
         LiveDocument.apply(this, arguments);
         
         this._instrumentationEnabled = false;
+        this._relatedDocuments = {
+            stylesheets : null,
+            scripts: null
+        };
         
         this._onChange = this._onChange.bind(this);
         $(this.doc).on("change", this._onChange);
@@ -88,6 +92,16 @@ define(function (require, exports, module) {
                 // TODO: handle error, wasThrown?
                 self.protocol.evaluate([clientId], command);
             });
+            
+            //TODO: this just retrieves an initial status to validate getRelated approach.
+            //Need to track changes by listening to events or check for status in other places.
+            self.protocol.getRelated([clientId])
+                .then(function(msg){
+                    self._relatedDocuments = msg.related;
+                })
+                .fail(function(err){
+                    console.log("error trying to get related documents:" + err);
+                });
         }
         
         // TODO: race condition if the version of the instrumented HTML that the browser loaded is out of sync with
@@ -273,6 +287,10 @@ define(function (require, exports, module) {
                 self._compareWithBrowser(change);
             });
         }
+    };
+    
+    LiveHTMLDocument.prototype.isRelated = function(path) {
+        return _.contains(this._relatedDocuments, this.urlResolver(path));
     };
 
     // Export the class
