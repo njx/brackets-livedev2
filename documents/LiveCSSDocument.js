@@ -62,7 +62,7 @@ define(function LiveCSSDocumentModule(require, exports, module) {
      *     If not specified initially, the LiveDocument will connect to the editor for the given document
      *     when it next becomes the active editor.
      */
-    var LiveCSSDocument = function LiveCSSDocument(protocol, urlResolver, doc, editor) {
+    var LiveCSSDocument = function LiveCSSDocument(protocol, urlResolver, doc, editor, connections) {
         LiveDocument.apply(this, arguments);
         
         // Add a ref to the doc since we're listening for change events
@@ -124,6 +124,8 @@ define(function LiveCSSDocumentModule(require, exports, module) {
         // TODO Need to add protocol API to replace associated stylesheet at runtime with the current
         // text of the document.
         //var reloadPromise = CSSAgent.reloadCSSForDocument(this.doc);
+        
+        this.protocol.evaluate(this.getConnectionIds(), "_LD.reloadCSS(" + JSON.stringify(this.doc.url) + ")");
 
         this.redrawHighlights();
     };

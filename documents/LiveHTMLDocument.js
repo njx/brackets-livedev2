@@ -40,7 +40,9 @@ define(function (require, exports, module) {
         StringUtils         = brackets.getModule("utils/StringUtils"),
         _                   = brackets.getModule("thirdparty/lodash"),
         LiveDocument        = require("documents/LiveDocument"),
-        HTMLInstrumentation = require("language/HTMLInstrumentation");
+        HTMLInstrumentation = require("language/HTMLInstrumentation"),
+        RemoteFunctions = require("text!protocol/remote/RemoteFunctions.js");
+
 
     /**
      * @constructor
@@ -86,20 +88,19 @@ define(function (require, exports, module) {
         if (url === this.urlResolver(this.doc.file.fullPath)) {
             // TODO: possible race condition if someone tries to access RemoteFunctions before this
             // injection is completed
-            brackets.getModule(["text!LiveDevelopment/Agents/RemoteFunctions.js"], function (RemoteFunctions) {
-                // Inject our remote functions into the browser.
-                var command = "window._LD=" + RemoteFunctions + "();";
-                // TODO: handle error, wasThrown?
-                self.protocol.evaluate([clientId], command);
-            });
+
+            // Inject our remote functions into the browser.
+            var command = "window._LD=" + RemoteFunctions + "();";
+            // TODO: handle error, wasThrown?
+            self.protocol.evaluate([clientId], command);
             
             //TODO: this just retrieves an initial status to validate getRelated approach.
             //Need to track changes by listening to events or check for status in other places.
             self.protocol.getRelated([clientId])
-                .then(function(msg){
+                .then(function (msg) {
                     self._relatedDocuments = msg.related;
                 })
-                .fail(function(err){
+                .fail(function (err) {
                     console.log("error trying to get related documents:" + err);
                 });
         }
@@ -289,10 +290,26 @@ define(function (require, exports, module) {
         }
     };
     
-    LiveHTMLDocument.prototype.isRelated = function(path) {
+    LiveHTMLDocument.prototype.isRelated = function (path) {
         return _.contains(this._relatedDocuments, this.urlResolver(path));
     };
 
+    LiveHTMLDocument.prototype.getRelated = function () {
+        var getRelatedPromise;
+        var clientId = this.getConnectionIds()[0]; // Using the first client to fine related docs
+        getRelatedPromise = new $.Deferred();
+        this.protocol.getRelated([clientId])
+            .then(function (msg) {
+                this._relatedDocuments = msg.related;
+                getRelatedPromise.resolve(this._relatedDocuments);
+            })
+            .fail(function (err) {
+                console.log("error trying to get related documents:" + err);
+                getRelatedPromise.reject("error trying to get related documents:" + err);
+            });
+
+        return getRelatedPromise;
+    };
     // Export the class
     module.exports = LiveHTMLDocument;
 });

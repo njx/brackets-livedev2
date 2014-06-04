@@ -23,7 +23,7 @@
 
 
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, indent: 4, forin: true, maxerr: 50, regexp: true */
-/*global define, $, brackets */
+/*global define, $, brackets, window */
 
 define(function (require, exports, module) {
     "use strict";
@@ -59,11 +59,11 @@ define(function (require, exports, module) {
      *     If not specified initially, the LiveDocument will connect to the editor for the given document
      *     when it next becomes the active editor.
      */
-    function LiveDocument(protocol, urlResolver, doc, editor) {
+    function LiveDocument(protocol, urlResolver, doc, editor, connections) {
         this.protocol = protocol;
         this.urlResolver = urlResolver;
         this.doc = doc;
-        this.connections = {};
+        this.connections = connections || {};
         
         this._onConnect = this._onConnect.bind(this);
         this._onClose = this._onClose.bind(this);
