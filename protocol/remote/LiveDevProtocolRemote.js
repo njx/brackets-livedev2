@@ -59,6 +59,37 @@
                     result: JSON.stringify(result) // TODO: in original protocol this is an object handle
                 });
             }
+            //TODO: Decouple stylesheets from scripts and provide events to track changes (added/removed). 
+            //Mechanism for extending protocol should probably change first.
+            if (msg.method === "Document.getRelated") {
+                console.log("Document.getRelated");
+                var related = {scripts: {}, stylesheets: {}};
+                
+                //iterate on document scripts (HTMLCollection doesn't provide forEach iterator).
+                for (var i=0; i < document.scripts.length ; i++){
+                    //add only external scripts
+                    if (document.scripts[i].src) { 
+                        related.scripts[document.scripts[i].src] = true; 
+                    }
+                }
+                //iterate on document.stylesheets (StyleSheetList doesn't provide forEach iterator).
+                for (var j=0; j < document.styleSheets.length ; j++){
+                    var s = document.styleSheets[j];
+                    if (s.href) { 
+                        related.stylesheets[s.href] = true; 
+                    }
+                    //check for @import rules
+                    var rules = s.cssRules;
+                    for (var k=0; k < rules.length; k++){
+                        if (rules[k].href) {
+                            related.stylesheets[rules[k].styleSheet.href] = true;
+                        }
+                    }
+                }
+                this.respond(msg, {
+                    related: JSON.stringify(related)
+                });
+            }
         },
         
         /**

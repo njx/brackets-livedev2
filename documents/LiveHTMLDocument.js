@@ -57,6 +57,7 @@ define(function (require, exports, module) {
         LiveDocument.apply(this, arguments);
         
         this._instrumentationEnabled = false;
+        this._relatedDocuments = null;
         
         this._onChange = this._onChange.bind(this);
         $(this.doc).on("change", this._onChange);
@@ -88,6 +89,20 @@ define(function (require, exports, module) {
                 // TODO: handle error, wasThrown?
                 self.protocol.evaluate([clientId], command);
             });
+            
+            //TODO: getRelated at this point just retrieves an initial status. Need to monitor changes 
+            //by listening to events triggered from the browser or check status in other places.
+            //TODO:Should we listen some sort of 'ready' event from the page rather than perform 
+            //this call as part of the connection handler? 
+            if (!self._relatedDocuments) {
+                self.protocol.getRelated([clientId])
+                    .then(function(msg){
+                        self._relatedDocuments = msg.related;
+                    })
+                    .fail(function(err){
+                        console.log("error trying to get related documents:" + err);
+                    });
+            }
         }
         
         // TODO: race condition if the version of the instrumented HTML that the browser loaded is out of sync with
@@ -273,6 +288,16 @@ define(function (require, exports, module) {
                 self._compareWithBrowser(change);
             });
         }
+    };
+    
+     /**
+     * For the given path, check if the document is related to te live HTML document.
+     * Related means that is an external Javascript or CSS file that is included as part of the DOM.
+     * @param {String} fullPath.
+     * @return {boolean} - is related or not.
+     */
+    LiveHTMLDocument.prototype.isRelated = function(fullPath) {
+        return _.contains(this._relatedDocuments, this.urlResolver(fullPath));
     };
 
     // Export the class
