@@ -350,7 +350,7 @@ define(function (require, exports, module) {
                 if (liveDoc) {
                     _server.add(liveDoc);
                     _relatedDocuments[doc.url] = liveDoc;
-
+                    _setStatus(STATUS_ACTIVE); // since opening one of the related docs
                     $(liveDoc).on("deleted.livedev", _handleRelatedDocumentDeleted);
                 }
             }
@@ -567,16 +567,16 @@ define(function (require, exports, module) {
                 // TODO: timeout if we don't get a connection within a certain time
                 $(_liveDocument).one("connect", function (event, url) {
                     var doc = _getCurrentDocument();
-                    if ((doc && url === doc.url) || _relatedDocuments.hasOwnProperty(doc.url)) { // make sure it's current or one of the related docs
-                        var getRelatedPromise = _liveDocument.getRelated();
+                    if (doc && url === doc.url) {       // if current doc
                         _setStatus(STATUS_ACTIVE);
-                        getRelatedPromise.done(function (relatedDocs) {
-                            var docs = Object.keys(JSON.parse(relatedDocs).stylesheets);
-                            docs.forEach(function (url) {
-                                _styleSheetAdded(null, url);
-                            });
-                        });
                     }
+                    var getRelatedPromise = _liveDocument.getRelated();
+                    getRelatedPromise.done(function (relatedDocs) {
+                        var docs = Object.keys(JSON.parse(relatedDocs).stylesheets);
+                        docs.forEach(function (url) {
+                            _styleSheetAdded(null, url);
+                        });
+                    });
                 });
             } else {
                 console.error("LiveDevelopment._open(): No server active");
@@ -685,7 +685,7 @@ define(function (require, exports, module) {
             _createLiveDocumentForFrame(doc);
 
             open();
-	}
+	    }
         $(_liveDocument).one("connect", function (event, url) {
             var doc = _getCurrentDocument();
             if (doc && url === _resolveUrl(doc.file.fullPath)) {
