@@ -37,34 +37,50 @@
     //     send(msgStr) - sends the given message string over the transport.
     var transport = global._Brackets_LiveDev_Transport;
     
-    
-    // Adding some initial implementation for monitoring changes in related documents 
-    // TODO: It works on Chrome35 and IE10 but not in Firefox29 (already deprecated?)
-    // Migrate this implementation to MutationObserver interface and use this based on
-    // MutationEvents as a fallback for browsers that still not support it.
+    // Initial migration of monitoring to MutationObserver interface
     // TODO: We should probably have a better extensible way of adding -sensors- to the remote document.
     // TODO: Should we have an 'abstract' protocol and some particular implementations for browser specifics?
-    function _onNodeInserted(evt) {
-        if (evt.target.tagName === "SCRIPT" && evt.target.src) {
-            transport.send(JSON.stringify({type: 'Script.Added', src: evt.target.src}));
-        }
-        if (evt.target.tagName === "LINK" && evt.target.rel === "stylesheet" && evt.target.href) {
-            transport.send(JSON.stringify({type: 'Stylesheet.Added', href: evt.target.href}));
-        }
-    }
-                
-    function _onNodeRemoved(evt) {
-        if (evt.target.tagName === "SCRIPT" && evt.target.src) {
-            transport.send(JSON.stringify({type: 'Script.Removed', src: evt.target.src}));
-        }
-        if (evt.target.tagName === "LINK" && evt.target.rel === "stylesheet" && evt.target.href) {
-            transport.send(JSON.stringify({type: 'Stylesheet.Removed', href: evt.target.href}));
-        }
-    }
-                
-    document.addEventListener('DOMNodeInserted', _onNodeInserted);
-    document.addEventListener('DOMNodeRemoved', _onNodeRemoved);
+    // TODO: We should find the right time to start observing and also see current relationship with getRelated documents
     
+    function _onNodesChanged(nodes, action) {
+        for (var i=0; i<nodes.length; i++) {
+            //check for Javascript files
+            if (nodes[i].nodeName === "SCRIPT" && nodes[i].src) {
+                transport.send(JSON.stringify({type: 'Script.' + action, src: nodes[i].src}));
+            }
+            //check for stylesheets
+            if (nodes[i].nodeName === "LINK" && nodes[i].rel === "stylesheet" && nodes[i].href) {
+                transport.send(JSON.stringify({type: 'Stylesheet.' + action, href: nodes[i].href}));
+            }
+        }
+    }
+    
+    var MutationObserver = window.MutationObserver || window.WebKitMutationObserver || window.MozMutationObserver;
+    if (MutationObserver) {
+        var observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if(mutation.addedNodes.length > 0) {
+                    _onNodesChanged(mutation.addedNodes, 'Added');
+                }
+                if(mutation.removedNodes.length > 0) {
+                    _onNodesChanged(mutation.removedNodes, 'Removed');
+                }
+            });
+        });
+        observer.observe(document, { 
+            childList: true, 
+            subtree:true 
+        });        
+
+    } else {
+        //use MutationEvents as fallback
+        document.addEventListener('DOMNodeInserted', function(e) {
+            _onNodesChanged([e.target], 'Added');
+        });
+        document.addEventListener('DOMNodeRemoved', function(e) {
+            _onNodesChanged([e.target], 'Removed');
+        });
+    }
     
     /**
      * The remote handler for the protocol.
@@ -88,7 +104,6 @@
                     result: JSON.stringify(result) // TODO: in original protocol this is an object handle
                 });
             }
-            //TODO: Decouple stylesheets from scripts and provide events to track changes (added/removed). 
             //Mechanism for extending protocol should probably change first.
             if (msg.method === "Document.getRelated") {
                 console.log("Document.getRelated");

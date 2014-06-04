@@ -57,13 +57,16 @@ define(function (require, exports, module) {
         LiveDocument.apply(this, arguments);
         
         this._instrumentationEnabled = false;
-        this._relatedDocuments = null;
+        this._relatedDocuments = {
+            stylesheets: {},
+            scripts: {}
+        };
         
         this._onChange = this._onChange.bind(this);
         $(this.doc).on("change", this._onChange);
         
-        this._onRemoteMessage = this._onRemoteMessage.bind(this);
-        $(this.protocol).on("event", this._onRemoteMessage);
+        this._onMessage = this._onMessage.bind(this);
+        $(this.protocol).on("event", this._onMessage);
     }
     
     LiveHTMLDocument.prototype = Object.create(LiveDocument.prototype);
@@ -97,15 +100,13 @@ define(function (require, exports, module) {
             //by listening to events triggered from the browser or check status in other places.
             //TODO:Should we listen some sort of 'ready' event from the page rather than perform 
             //this call as part of the connection handler? 
-            if (!self._relatedDocuments) {
-                self.protocol.getRelated([clientId])
+            self.protocol.getRelated([clientId])
                     .then(function(msg){
                         self._relatedDocuments = JSON.parse(msg.related);
                     })
                     .fail(function(err){
                         console.log("error trying to get related documents:" + err);
                     });
-            }
         }
         
         // TODO: race condition if the version of the instrumented HTML that the browser loaded is out of sync with
@@ -302,20 +303,20 @@ define(function (require, exports, module) {
      * @param {Object} msg
      * TODO: we should have a better extensible way to register handlers for different message types (subscribe?).
      */
-    LiveHTMLDocument.prototype._onRemoteMessage = function (event, clientId, msg) {
+    LiveHTMLDocument.prototype._onMessage = function (event, clientId, msg) {
         
         switch (msg.type) {
             case "Stylesheet.Added":
                 this._relatedDocuments.stylesheets[msg.href] = true;
                 break;
             case "Stylesheet.Removed":
-                this._relatedDocuments.stylesheets.delete(msg.href);
+                delete(this._relatedDocuments.stylesheets.delete[msg.href]);
                 break;
             case "Script.Added":
-                this._relatedDocuments.scripts[msg.href] = true;
+                this._relatedDocuments.scripts[msg.src] = true;
                 break;
             case "Script.Removed":
-                this._relatedDocuments.scripts.delete(msg.href);
+                delete(this._relatedDocuments.scripts[msg.src]);
                 break;                
         }
     };
