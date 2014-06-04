@@ -37,6 +37,35 @@
     //     send(msgStr) - sends the given message string over the transport.
     var transport = global._Brackets_LiveDev_Transport;
     
+    
+    // Adding some initial implementation for monitoring changes in related documents 
+    // TODO: It works on Chrome35 and IE10 but not in Firefox29 (already deprecated?)
+    // Migrate this implementation to MutationObserver interface and use this based on
+    // MutationEvents as a fallback for browsers that still not support it.
+    // TODO: We should probably have a better extensible way of adding -sensors- to the remote document.
+    // TODO: Should we have an 'abstract' protocol and some particular implementations for browser specifics?
+    function _onNodeInserted(evt) {
+        if (evt.target.tagName === "SCRIPT" && evt.target.src) {
+            transport.send(JSON.stringify({type: 'Script.Added', src: evt.target.src}));
+        }
+        if (evt.target.tagName === "LINK" && evt.target.rel === "stylesheet" && evt.target.href) {
+            transport.send(JSON.stringify({type: 'Stylesheet.Added', href: evt.target.href}));
+        }
+    }
+                
+    function _onNodeRemoved(evt) {
+        if (evt.target.tagName === "SCRIPT" && evt.target.src) {
+            transport.send(JSON.stringify({type: 'Script.Removed', src: evt.target.src}));
+        }
+        if (evt.target.tagName === "LINK" && evt.target.rel === "stylesheet" && evt.target.href) {
+            transport.send(JSON.stringify({type: 'Stylesheet.Removed', href: evt.target.href}));
+        }
+    }
+                
+    document.addEventListener('DOMNodeInserted', _onNodeInserted);
+    document.addEventListener('DOMNodeRemoved', _onNodeRemoved);
+    
+    
     /**
      * The remote handler for the protocol.
      */

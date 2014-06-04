@@ -61,6 +61,9 @@ define(function (require, exports, module) {
         
         this._onChange = this._onChange.bind(this);
         $(this.doc).on("change", this._onChange);
+        
+        this._onRemoteMessage = this._onRemoteMessage.bind(this);
+        $(this.protocol).on("event", this._onRemoteMessage);
     }
     
     LiveHTMLDocument.prototype = Object.create(LiveDocument.prototype);
@@ -97,7 +100,7 @@ define(function (require, exports, module) {
             if (!self._relatedDocuments) {
                 self.protocol.getRelated([clientId])
                     .then(function(msg){
-                        self._relatedDocuments = msg.related;
+                        self._relatedDocuments = JSON.parse(msg.related);
                     })
                     .fail(function(err){
                         console.log("error trying to get related documents:" + err);
@@ -287,6 +290,33 @@ define(function (require, exports, module) {
             applyEditsPromise.done(function () {
                 self._compareWithBrowser(change);
             });
+        }
+    };
+    
+    
+    /**
+     * @private
+     * Handles message received from the browser.
+     * @param {$.Event} event
+     * @param {number} clientId
+     * @param {Object} msg
+     * TODO: we should have a better extensible way to register handlers for different message types (subscribe?).
+     */
+    LiveHTMLDocument.prototype._onRemoteMessage = function (event, clientId, msg) {
+        
+        switch (msg.type) {
+            case "Stylesheet.Added":
+                this._relatedDocuments.stylesheets[msg.href] = true;
+                break;
+            case "Stylesheet.Removed":
+                this._relatedDocuments.stylesheets.delete(msg.href);
+                break;
+            case "Script.Added":
+                this._relatedDocuments.scripts[msg.href] = true;
+                break;
+            case "Script.Removed":
+                this._relatedDocuments.scripts.delete(msg.href);
+                break;                
         }
     };
     
