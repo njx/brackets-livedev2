@@ -740,6 +740,11 @@ define(function (require, exports, module) {
         // detect it on our side by seeing what files the server serves up. (If we allow multiple
         // documents to be live previewed at once, we'd need to match up the files being
         // served with their associated main documents, probably via the referrer.)
+        
+        if (_liveDocument.isRelated(absolutePath)) {
+            //do something
+            console.log("related document saved");
+        }
     }
 
     /** 

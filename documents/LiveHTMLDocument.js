@@ -95,18 +95,6 @@ define(function (require, exports, module) {
                 // TODO: handle error, wasThrown?
                 self.protocol.evaluate([clientId], command);
             });
-            
-            //TODO: getRelated at this point just retrieves an initial status. Need to monitor changes 
-            //by listening to events triggered from the browser or check status in other places.
-            //TODO:Should we listen some sort of 'ready' event from the page rather than perform 
-            //this call as part of the connection handler? 
-            self.protocol.getRelated([clientId])
-                    .then(function(msg){
-                        self._relatedDocuments = JSON.parse(msg.related);
-                    })
-                    .fail(function(err){
-                        console.log("error trying to get related documents:" + err);
-                    });
         }
         
         // TODO: race condition if the version of the instrumented HTML that the browser loaded is out of sync with
@@ -310,7 +298,7 @@ define(function (require, exports, module) {
                 this._relatedDocuments.stylesheets[msg.href] = true;
                 break;
             case "Stylesheet.Removed":
-                delete(this._relatedDocuments.stylesheets.delete[msg.href]);
+                delete(this._relatedDocuments.stylesheets[msg.href]);
                 break;
             case "Script.Added":
                 this._relatedDocuments.scripts[msg.src] = true;
@@ -328,7 +316,7 @@ define(function (require, exports, module) {
      * @return {boolean} - is related or not.
      */
     LiveHTMLDocument.prototype.isRelated = function(fullPath) {
-        return _.contains(this._relatedDocuments, this.urlResolver(fullPath));
+        return (this._relatedDocuments.scripts[this.urlResolver(fullPath)] || this._relatedDocuments.stylesheets[this.urlResolver(fullPath)]);
     };
 
     // Export the class
