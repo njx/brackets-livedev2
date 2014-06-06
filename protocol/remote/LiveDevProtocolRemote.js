@@ -37,6 +37,79 @@
     //     send(msgStr) - sends the given message string over the transport.
     var transport = global._Brackets_LiveDev_Transport;
     
+    // Queue for pending messages that could be eventually sent before transport is connected. 
+    var _msgQueue = [];
+    
+    /*
+    / Enqueue a message and process the queue if transport is available.
+    */
+    function _send(msg) {    
+        _msgQueue.push(msg);
+        if (transport) {
+            _processMsgQueue();
+        } 
+    }
+    
+    /*
+    / Consumes messages in the queue and send them trough the current transport.
+    */
+    function _processMsgQueue() {
+        while(_msgQueue.length > 0) {
+            transport.send(JSON.stringify(_msgQueue.shift()));
+        }
+    }
+
+    // Initial migration of monitoring to MutationObserver interface
+    // TODO: We should probably have a better extensible way of adding -sensors- to the remote document.
+    function _onNodesChanged(nodes, action) {
+        for (var i=0; i<nodes.length; i++) {
+            //check for Javascript files
+            if (nodes[i].nodeName === "SCRIPT" && nodes[i].src) {
+                _send({type: 'Script.' + action, src: nodes[i].src});
+            }
+            //check for stylesheets
+            if (nodes[i].nodeName === "LINK" && nodes[i].rel === "stylesheet" && nodes[i].href) {
+                _send({type: 'Stylesheet.' + action, href: nodes[i].href});
+                // TODO: check for @import rules. 
+                // It seems that node we get from MutationRecord doesn't have the entire information, 
+                // probably because of the time when the event is being triggered: 
+                //  - Added stylesheet has import rules (wich give us relative URL) but, 
+                //    the stylesheet to be imported is not yet loaded (sheet=null).
+                //  - Removed stylesheet also has sheet=null since it was proabably already removed.
+                // Need to invastigate deeper on MutationObserver or eventually mantain a simple 
+                // representation of CSS dependencies by querying DOM after the sheet is loaded 
+                // and iterate on depedencies when the parent node is being removed.
+            }
+        }
+    }
+    
+    var MutationObserver = window.MutationObserver || window.WebKitMutationObserver || window.MozMutationObserver;
+    if (MutationObserver) {
+        var observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if(mutation.addedNodes.length > 0) {
+                    _onNodesChanged(mutation.addedNodes, 'Added');
+                }
+                if(mutation.removedNodes.length > 0) {
+                    _onNodesChanged(mutation.removedNodes, 'Removed');
+                }
+            });
+        });
+        observer.observe(document, { 
+            childList: true, 
+            subtree:true 
+        });        
+
+    } else {
+        //use MutationEvents as fallback
+        document.addEventListener('DOMNodeInserted', function(e) {
+            _onNodesChanged([e.target], 'Added');
+        });
+        document.addEventListener('DOMNodeRemoved', function(e) {
+            _onNodesChanged([e.target], 'Removed');
+        });
+    }
+    
     /**
      * The remote handler for the protocol.
      */
@@ -59,7 +132,6 @@
                     result: JSON.stringify(result) // TODO: in original protocol this is an object handle
                 });
             }
-            //TODO: Decouple stylesheets from scripts and provide events to track changes (added/removed). 
             //Mechanism for extending protocol should probably change first.
             if (msg.method === "Document.getRelated") {
                 console.log("Document.getRelated");
@@ -109,6 +181,13 @@
         respond: function (orig, response) {
             response.id = orig.id;
             transport.send(JSON.stringify(response));
+        },
+        
+        /**
+         * Handler for transport connection.
+         */
+        connect: function() {
+            _processMsgQueue();
         }
     };
     

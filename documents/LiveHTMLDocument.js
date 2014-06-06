@@ -60,12 +60,15 @@ define(function (require, exports, module) {
         
         this._instrumentationEnabled = false;
         this._relatedDocuments = {
-            stylesheets : null,
-            scripts: null
+            stylesheets: {},
+            scripts: {}
         };
         
         this._onChange = this._onChange.bind(this);
         $(this.doc).on("change", this._onChange);
+        
+        this._onMessage = this._onMessage.bind(this);
+        $(this.protocol).on("event", this._onMessage);
     }
     
     LiveHTMLDocument.prototype = Object.create(LiveDocument.prototype);
@@ -94,15 +97,6 @@ define(function (require, exports, module) {
             // TODO: handle error, wasThrown?
             self.protocol.evaluate([clientId], command);
             
-            //TODO: this just retrieves an initial status to validate getRelated approach.
-            //Need to track changes by listening to events or check for status in other places.
-            self.protocol.getRelated([clientId])
-                .then(function (msg) {
-                    self._relatedDocuments = JSON.parse(msg.related);
-                })
-                .fail(function (err) {
-                    console.log("error trying to get related documents:" + err);
-                });
         }
         
         // TODO: race condition if the version of the instrumented HTML that the browser loaded is out of sync with
@@ -290,8 +284,41 @@ define(function (require, exports, module) {
         }
     };
     
-    LiveHTMLDocument.prototype.isRelated = function (path) {
-        return _.contains(this._relatedDocuments, this.urlResolver(path));
+    
+    /**
+     * @private
+     * Handles message received from the browser.
+     * @param {$.Event} event
+     * @param {number} clientId
+     * @param {Object} msg
+     * TODO: we should have a better extensible way to register handlers for different message types (subscribe?).
+     */
+    LiveHTMLDocument.prototype._onMessage = function (event, clientId, msg) {
+        
+        switch (msg.type) {
+            case "Stylesheet.Added":
+                this._relatedDocuments.stylesheets[msg.href] = true;
+                break;
+            case "Stylesheet.Removed":
+                delete(this._relatedDocuments.stylesheets[msg.href]);
+                break;
+            case "Script.Added":
+                this._relatedDocuments.scripts[msg.src] = true;
+                break;
+            case "Script.Removed":
+                delete(this._relatedDocuments.scripts[msg.src]);
+                break;                
+        }
+    };
+    
+     /**
+     * For the given path, check if the document is related to te live HTML document.
+     * Related means that is an external Javascript or CSS file that is included as part of the DOM.
+     * @param {String} fullPath.
+     * @return {boolean} - is related or not.
+     */
+    LiveHTMLDocument.prototype.isRelated = function(fullPath) {
+        return (this._relatedDocuments.scripts[this.urlResolver(fullPath)] || this._relatedDocuments.stylesheets[this.urlResolver(fullPath)]);
     };
 
     LiveHTMLDocument.prototype.getRelated = function () {
