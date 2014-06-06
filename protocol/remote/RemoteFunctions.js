@@ -813,7 +813,7 @@ function RemoteFunctions(experimental) {
             // The side effect of this is that it flickers since it removes the element first
 
             var parent = link.parentNode;
-            var next = link.nextSibling;
+            var next = link.nextElementSibling;
             parent.removeChild(link);   // also tried link.disabled = true;
             parent.insertBefore(link, next);
 
@@ -845,13 +845,14 @@ function RemoteFunctions(experimental) {
                 // Assume the file is loaded through @import
                 // Since we don't know which one, reload all of them
                 // This is kind of a hack to support @import for now
-                //:TODO: Search linked files "recursively" to find the actual one
+                //:TODO: We can pass the base links from the related docs instead of the 
+		// imported file url to avoid this case.
                 // Note: This works in Chrome, but not in Firefox since FF caches the imported files
                 //:TODO: To make in work for FF, need to parse the CSS files and add a query to the imports
                 // for example change @import url(a.css) to @import url(a.css?count=xyz)
                 for (i = 0; i < links.length; i++) {
                     link = links[i];
-                    updateCSS(link.href.substring(0, link.href.indexOf("?count=")), link);
+                    updateCSS(link.href.substring(0, link.href.indexOf("?count=")) || link.href, link);
                 }
             }
         }

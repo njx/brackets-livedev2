@@ -98,7 +98,7 @@ define(function (require, exports, module) {
             //Need to track changes by listening to events or check for status in other places.
             self.protocol.getRelated([clientId])
                 .then(function (msg) {
-                    self._relatedDocuments = msg.related;
+                    self._relatedDocuments = JSON.parse(msg.related);
                 })
                 .fail(function (err) {
                     console.log("error trying to get related documents:" + err);
@@ -300,14 +300,13 @@ define(function (require, exports, module) {
         getRelatedPromise = new $.Deferred();
         this.protocol.getRelated([clientId])
             .then(function (msg) {
-                this._relatedDocuments = msg.related;
+                this._relatedDocuments = JSON.parse(msg.related);
                 getRelatedPromise.resolve(this._relatedDocuments);
             })
             .fail(function (err) {
                 console.log("error trying to get related documents:" + err);
                 getRelatedPromise.reject("error trying to get related documents:" + err);
             });
-
         return getRelatedPromise;
     };
     // Export the class

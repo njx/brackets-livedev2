@@ -64,27 +64,35 @@
             if (msg.method === "Document.getRelated") {
                 console.log("Document.getRelated");
                 var related = {scripts: {}, stylesheets: {}};
-                
+                var i;
                 //iterate on document scripts (HTMLCollection doesn't provide forEach iterator).
-                for (var i=0; i < document.scripts.length ; i++){
+                for (i = 0; i < document.scripts.length; i++) {
                     //add only external scripts
-                    if (document.scripts[i].src) { 
-                        related.scripts[document.scripts[i].src] = true; 
+                    if (document.scripts[i].src) {
+                        related.scripts[document.scripts[i].src] = true;
                     }
                 }
-                //iterate on document.stylesheets (StyleSheetList doesn't provide forEach iterator).
-                for (var j=0; j < document.styleSheets.length ; j++){
-                    var s = document.styleSheets[j];
-                    if (s.href) { 
-                        related.stylesheets[s.href] = true; 
-                    }
-                    //check for @import rules
-                    var rules = s.cssRules;
-                    for (var k=0; k < rules.length; k++){
-                        if (rules[k].href) {
-                            related.stylesheets[rules[k].styleSheet.href] = true;
+                var s, j;
+                //traverse @import rules
+                var traverseRules = function _traverseRules(sheet, base) {
+                    var i;
+                    if (sheet.href && sheet.cssRules) {
+                        if (related.stylesheets[sheet.href] === undefined) {
+                            related.stylesheets[sheet.href] = [];
+                        }
+                        related.stylesheets[sheet.href].push(base);
+                        //console.log("rule in: " + sheet.href + ", base: " + base);
+                        for (i = 0; i < sheet.cssRules.length; i++) {
+                            if (sheet.cssRules[i].href) {
+                                traverseRules(sheet.cssRules[i].styleSheet, base);
+                            }
                         }
                     }
+                };
+                //iterate on document.stylesheets (StyleSheetList doesn't provide forEach iterator).
+                for (j = 0; j < document.styleSheets.length; j++) {
+                    s = document.styleSheets[j];
+                    traverseRules(s, s.href);
                 }
                 this.respond(msg, {
                     related: JSON.stringify(related)
