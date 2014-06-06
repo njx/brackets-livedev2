@@ -350,7 +350,7 @@ define(function (require, exports, module) {
                 if (liveDoc) {
                     _server.add(liveDoc);
                     _relatedDocuments[doc.url] = liveDoc;
-
+                    _setStatus(STATUS_ACTIVE); // since opening one of the related docs
                     $(liveDoc).on("deleted.livedev", _handleRelatedDocumentDeleted);
                 }
             }
@@ -567,21 +567,21 @@ define(function (require, exports, module) {
                 // TODO: timeout if we don't get a connection within a certain time
                 $(_liveDocument).one("connect", function (event, url) {
                     var doc = _getCurrentDocument();
-                    if ((doc && url === doc.url) || _relatedDocuments.hasOwnProperty(doc.url)) { // make sure it's current or one of the related docs
-                        var getRelatedPromise;
-                        //:TODO - A delay introduced here since sometimes the related docs are not loaded yet at connect
-                        // This is a temp solution.
-                        setTimeout(function () {
-                            getRelatedPromise = _liveDocument.getRelated();
-                            getRelatedPromise.done(function (relatedDocs) {
-                                var docs = Object.keys(relatedDocs.stylesheets);
-                                docs.forEach(function (url) {
-                                    _styleSheetAdded(null, url);
-                                });
-                            });
-                        }, 500);
+                    if (doc && url === doc.url) {       // if current doc
                         _setStatus(STATUS_ACTIVE);
                     }
+                    //:TODO - A delay introduced here since sometimes the related docs are not loaded yet at connect
+                    // This is a temp solution.
+                    setTimeout(function () {
+                        var getRelatedPromise;
+                        getRelatedPromise = _liveDocument.getRelated();
+                        getRelatedPromise.done(function (relatedDocs) {
+                            var docs = Object.keys(relatedDocs.stylesheets);
+                            docs.forEach(function (url) {
+                                _styleSheetAdded(null, url);
+                            });
+                        });
+                    }, 500);
                 });
             } else {
                 console.error("LiveDevelopment._open(): No server active");
