@@ -296,18 +296,18 @@ define(function (require, exports, module) {
     LiveHTMLDocument.prototype._onMessage = function (event, clientId, msg) {
         
         switch (msg.type) {
-            case "Stylesheet.Added":
-                this._relatedDocuments.stylesheets[msg.href] = true;
-                break;
-            case "Stylesheet.Removed":
-                delete(this._relatedDocuments.stylesheets[msg.href]);
-                break;
-            case "Script.Added":
-                this._relatedDocuments.scripts[msg.src] = true;
-                break;
-            case "Script.Removed":
-                delete(this._relatedDocuments.scripts[msg.src]);
-                break;                
+        case "Stylesheet.Added":
+            this._relatedDocuments.stylesheets[msg.href] = true;
+            break;
+        case "Stylesheet.Removed":
+            delete (this._relatedDocuments.stylesheets[msg.href]);
+            break;
+        case "Script.Added":
+            this._relatedDocuments.scripts[msg.src] = true;
+            break;
+        case "Script.Removed":
+            delete (this._relatedDocuments.scripts[msg.src]);
+            break;
         }
     };
     
@@ -317,7 +317,7 @@ define(function (require, exports, module) {
      * @param {String} fullPath.
      * @return {boolean} - is related or not.
      */
-    LiveHTMLDocument.prototype.isRelated = function(fullPath) {
+    LiveHTMLDocument.prototype.isRelated = function (fullPath) {
         return (this._relatedDocuments.scripts[this.urlResolver(fullPath)] || this._relatedDocuments.stylesheets[this.urlResolver(fullPath)]);
     };
 
