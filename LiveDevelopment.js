@@ -567,7 +567,7 @@ define(function (require, exports, module) {
                 // TODO: timeout if we don't get a connection within a certain time
                 $(_liveDocument).one("connect", function (event, url) {
                     var doc = _getCurrentDocument();
-                    if (doc && url === doc.url) {       // if current doc
+                    if (doc && url === _resolveUrl(doc.file.fullPath)) {
                         _setStatus(STATUS_ACTIVE);
                     }
                     //:TODO - A delay introduced here since sometimes the related docs are not loaded yet at connect
