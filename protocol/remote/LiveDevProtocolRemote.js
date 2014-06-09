@@ -60,8 +60,8 @@
                 });
             }
             //DocumentWatcher should probably register this method.
-            if (msg.method === "Document.getRelated") {
-                console.log("Document.getRelated");
+            if (msg.method === "Document.Related") {
+                console.log("Document.Related");
                 var related = DocumentObserver.related();
                 this.respond(msg, {
                     related: JSON.stringify(related)
