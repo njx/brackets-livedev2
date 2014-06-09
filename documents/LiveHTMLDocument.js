@@ -294,6 +294,9 @@ define(function (require, exports, module) {
     LiveHTMLDocument.prototype._onMessage = function (event, clientId, msg) {
         
         switch (msg.type) {
+            case "Document.Related":
+                this._relatedDocuments = msg.related;
+                break;
             case "Stylesheet.Added":
                 this._relatedDocuments.stylesheets[msg.href] = true;
                 break;
