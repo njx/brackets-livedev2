@@ -188,7 +188,7 @@ define(function (require, exports, module) {
         return _send(
             clients,
             {
-                method: "Document.getRelated",
+                method: "Document.Related",
                 params: {}
             }
         );

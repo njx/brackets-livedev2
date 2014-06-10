@@ -37,80 +37,6 @@
     //     send(msgStr) - sends the given message string over the transport.
     var transport = global._Brackets_LiveDev_Transport;
     
-    // Queue for pending messages that could be eventually sent before transport is connected. 
-    var _msgQueue = [];
-    
-    /*
-    / Consumes messages in the queue and send them trough the current transport.
-    */
-    function _processMsgQueue() {
-        while (_msgQueue.length > 0) {
-            transport.send(JSON.stringify(_msgQueue.shift()));
-        }
-    }
-
-    /*
-    / Enqueue a message and process the queue if transport is available.
-    */
-    function _send(msg) {
-        _msgQueue.push(msg);
-        if (transport) {
-            _processMsgQueue();
-        }
-    }
-    
-    // Initial migration of monitoring to MutationObserver interface
-    // TODO: We should probably have a better extensible way of adding -sensors- to the remote document.
-    function _onNodesChanged(nodes, action) {
-        var i;
-        for (i = 0; i < nodes.length; i++) {
-            //check for Javascript files
-            if (nodes[i].nodeName === "SCRIPT" && nodes[i].src) {
-                _send({type: 'Script.' + action, src: nodes[i].src});
-            }
-            //check for stylesheets
-            if (nodes[i].nodeName === "LINK" && nodes[i].rel === "stylesheet" && nodes[i].href) {
-                _send({type: 'Stylesheet.' + action, href: nodes[i].href});
-                // TODO: check for @import rules. 
-                // It seems that node we get from MutationRecord doesn't have the entire information, 
-                // probably because of the time when the event is being triggered: 
-                //  - Added stylesheet has import rules (wich give us relative URL) but, 
-                //    the stylesheet to be imported is not yet loaded (sheet=null).
-                //  - Removed stylesheet also has sheet=null since it was proabably already removed.
-                // Need to invastigate deeper on MutationObserver or eventually mantain a simple 
-                // representation of CSS dependencies by querying DOM after the sheet is loaded 
-                // and iterate on depedencies when the parent node is being removed.
-            }
-        }
-    }
-    
-    var MutationObserver = window.MutationObserver || window.WebKitMutationObserver || window.MozMutationObserver;
-    if (MutationObserver) {
-        var observer = new MutationObserver(function (mutations) {
-            mutations.forEach(function (mutation) {
-                if (mutation.addedNodes.length > 0) {
-                    _onNodesChanged(mutation.addedNodes, 'Added');
-                }
-                if (mutation.removedNodes.length > 0) {
-                    _onNodesChanged(mutation.removedNodes, 'Removed');
-                }
-            });
-        });
-        observer.observe(document, {
-            childList: true,
-            subtree: true
-        });
-
-    } else {
-        //use MutationEvents as fallback
-        document.addEventListener('DOMNodeInserted', function (e) {
-            _onNodesChanged([e.target], 'Added');
-        });
-        document.addEventListener('DOMNodeRemoved', function (e) {
-            _onNodesChanged([e.target], 'Removed');
-        });
-    }
-    
     /**
      * The remote handler for the protocol.
      */
@@ -133,40 +59,10 @@
                     result: JSON.stringify(result) // TODO: in original protocol this is an object handle
                 });
             }
-            //Mechanism for extending protocol should probably change first.
-            if (msg.method === "Document.getRelated") {
-                console.log("Document.getRelated");
-                var related = {scripts: {}, stylesheets: {}};
-                var i;
-                //iterate on document scripts (HTMLCollection doesn't provide forEach iterator).
-                for (i = 0; i < document.scripts.length; i++) {
-                    //add only external scripts
-                    if (document.scripts[i].src) {
-                        related.scripts[document.scripts[i].src] = true;
-                    }
-                }
-                var s, j;
-                //traverse @import rules
-                var traverseRules = function _traverseRules(sheet, base) {
-                    var i;
-                    if (sheet.href && sheet.cssRules) {
-                        if (related.stylesheets[sheet.href] === undefined) {
-                            related.stylesheets[sheet.href] = [];
-                        }
-                        related.stylesheets[sheet.href].push(base);
-                        //console.log("rule in: " + sheet.href + ", base: " + base);
-                        for (i = 0; i < sheet.cssRules.length; i++) {
-                            if (sheet.cssRules[i].href) {
-                                traverseRules(sheet.cssRules[i].styleSheet, base);
-                            }
-                        }
-                    }
-                };
-                //iterate on document.stylesheets (StyleSheetList doesn't provide forEach iterator).
-                for (j = 0; j < document.styleSheets.length; j++) {
-                    s = document.styleSheets[j];
-                    traverseRules(s, s.href);
-                }
+            //DocumentWatcher should probably register this method.
+            if (msg.method === "Document.Related") {
+                console.log("Document.Related");
+                var related = DocumentObserver.related();
                 this.respond(msg, {
                     related: JSON.stringify(related)
                 });
@@ -183,13 +79,6 @@
             response.id = orig.id;
             transport.send(JSON.stringify(response));
         },
-        
-        /**
-         * Handler for transport connection.
-         */
-        connect: function () {
-            _processMsgQueue();
-        }
     };
     
     // By the time this executes, there must already be an active transport.
@@ -199,4 +88,147 @@
     }
     
     transport.setCallbacks(ProtocolHandler);
+    
+    
+    //TODO: Protocol should probably have a method addWatcher to dynamically inject oberservers
+    var DocumentObserver = {
+        
+        // @imports references for tracking changes
+        _imports : {},
+        
+        /* init hook. */
+        start:  function() {
+            //start listening to node changes
+            this._enableListeners();
+            //send the current status of related docs. 
+            transport.send(JSON.stringify({
+                type: "Document.Related", 
+                related: this.related()
+            }));
+        },
+        
+        /*  Retrieves related documents (external CSS and JS files) */
+        related: function() {
+            var related = {
+                scripts: {}, 
+                stylesheets: {}
+            };
+            var i;
+            //iterate on document scripts (HTMLCollection doesn't provide forEach iterator).
+            for (i=0; i < document.scripts.length ; i++){
+                //add only external scripts
+                if (document.scripts[i].src) { 
+                    related.scripts[document.scripts[i].src] = true; 
+                }
+            }
+          
+            var s, j;
+            //traverse @import rules
+            var traverseRules = function _traverseRules(sheet, base) {
+                var i;
+                if (sheet.href && sheet.cssRules) {
+                    if (related.stylesheets[sheet.href] === undefined) {
+                        related.stylesheets[sheet.href] = [];
+                    }
+                    related.stylesheets[sheet.href].push(base);
+                    //console.log("rule in: " + sheet.href + ", base: " + base);
+                    for (i = 0; i < sheet.cssRules.length; i++) {
+                        if (sheet.cssRules[i].href) {
+                            traverseRules(sheet.cssRules[i].styleSheet, base);
+                        }
+                    }
+                }
+            };
+            //iterate on document.stylesheets (StyleSheetList doesn't provide forEach iterator).
+            for (j = 0; j < document.styleSheets.length; j++) {
+                s = document.styleSheets[j];
+                traverseRules(s, s.href);
+            }
+            return related;
+        },
+        
+        _enableListeners: function() {    
+            var self = this;
+            // enable MutationOberver if it's supported
+            var MutationObserver = window.MutationObserver || window.WebKitMutationObserver || window.MozMutationObserver;
+            if (MutationObserver) {
+                var observer = new MutationObserver(function(mutations) {
+                    mutations.forEach(function(mutation) {
+                        if (mutation.addedNodes.length > 0) {
+                            self._onNodesChanged(mutation.addedNodes, 'Added');
+                        }
+                        if (mutation.removedNodes.length > 0) {
+                            self._onNodesChanged(mutation.removedNodes, 'Removed');
+                        }
+                    });
+                });
+                observer.observe(document, { 
+                    childList: true, 
+                    subtree:true 
+                });        
+
+            } else {
+                // use MutationEvents as fallback 
+                document.addEventListener('DOMNodeInserted', function niLstnr(e) {
+                    self._onNodesChanged([e.target], 'Added');
+                });
+                document.addEventListener('DOMNodeRemoved', function nrLstnr(e) {
+                    self._onNodesChanged([e.target], 'Removed');
+                });
+            }        
+        },
+        
+        /* 
+        * Extract styleSheets included in CSSImportRules.
+        * @param {Object} stylesheet
+        * @return {Array} import import-ed StyleSheets
+        * TODO: recursive check of @imports  
+        */
+        _scanImports: function(styleSheet) {
+            //check for @import rules
+            var imports = [];
+            for (var i=0; i < styleSheet.cssRules.length; i++) {
+                if (styleSheet.cssRules[i].href) {
+                    imports.push(styleSheet.cssRules[i].styleSheet);
+                }
+            }
+            return imports;    
+        },
+        /* send an event in case that a related doc was added/removed */ 
+        _onNodesChanged: function(nodes, action) {
+            var self = this;
+            for (var i=0; i<nodes.length; i++) {
+                //check for Javascript files
+                if (nodes[i].nodeName === "SCRIPT" && nodes[i].src) {
+                    transport.send(JSON.stringify({
+                        type: 'Script.' + action, 
+                        src: nodes[i].src
+                    }));
+                }
+                //check for stylesheets
+                if (nodes[i].nodeName === "LINK" && nodes[i].rel === "stylesheet" && nodes[i].href) {
+                    transport.send(JSON.stringify({
+                        type: 'Stylesheet.' + action, 
+                        href: nodes[i].href
+                    }));
+                    // TODO: check for @import rules. 
+                    // It seems that node we get from MutationRecord doesn't have the entire information:
+                    //  - Added stylesheet has import rules (wich give us relative URL) but in Chrome, 
+                    //    the stylesheet to be imported is not yet loaded (sheet=null). 
+                    //  - Removed stylesheet also has sheet=null since it was proabably already removed.
+                }
+            }
+        },
+        
+        stop: function() {}
+    };
+    
+    window.addEventListener('load', function(){
+        DocumentObserver.start();
+    });
+    
+    window.addEventListener('unload', function(){
+        DocumentObserver.stop();
+    });
+    
 }(this));
