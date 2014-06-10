@@ -296,21 +296,21 @@ define(function (require, exports, module) {
     LiveHTMLDocument.prototype._onMessage = function (event, clientId, msg) {
         
         switch (msg.type) {
-            case "Document.Related":
-                this._relatedDocuments = msg.related;
-                break;
-            case "Stylesheet.Added":
-                this._relatedDocuments.stylesheets[msg.href] = true;
-                break;
-            case "Stylesheet.Removed":
-                delete(this._relatedDocuments.stylesheets[msg.href]);
-                break;
-            case "Script.Added":
-                this._relatedDocuments.scripts[msg.src] = true;
-                break;
-            case "Script.Removed":
-                delete(this._relatedDocuments.scripts[msg.src]);
-                break;                
+        case "Document.Related":
+            this._relatedDocuments = msg.related;
+            break;
+        case "Stylesheet.Added":
+            this._relatedDocuments.stylesheets[msg.href] = true;
+            break;
+        case "Stylesheet.Removed":
+            delete (this._relatedDocuments.stylesheets[msg.href]);
+            break;
+        case "Script.Added":
+            this._relatedDocuments.scripts[msg.src] = true;
+            break;
+        case "Script.Removed":
+            delete (this._relatedDocuments.scripts[msg.src]);
+            break;
         }
     };
     

@@ -78,7 +78,7 @@
         respond: function (orig, response) {
             response.id = orig.id;
             transport.send(JSON.stringify(response));
-        },
+        }
     };
     
     // By the time this executes, there must already be an active transport.
@@ -97,28 +97,28 @@
         _imports : {},
         
         /* init hook. */
-        start:  function() {
+        start:  function () {
             //start listening to node changes
             this._enableListeners();
             //send the current status of related docs. 
             transport.send(JSON.stringify({
-                type: "Document.Related", 
+                type: "Document.Related",
                 related: this.related()
             }));
         },
         
         /*  Retrieves related documents (external CSS and JS files) */
-        related: function() {
+        related: function () {
             var related = {
-                scripts: {}, 
+                scripts: {},
                 stylesheets: {}
             };
             var i;
             //iterate on document scripts (HTMLCollection doesn't provide forEach iterator).
-            for (i=0; i < document.scripts.length ; i++){
+            for (i = 0; i < document.scripts.length; i++) {
                 //add only external scripts
-                if (document.scripts[i].src) { 
-                    related.scripts[document.scripts[i].src] = true; 
+                if (document.scripts[i].src) {
+                    related.scripts[document.scripts[i].src] = true;
                 }
             }
           
@@ -147,13 +147,13 @@
             return related;
         },
         
-        _enableListeners: function() {    
+        _enableListeners: function () {
             var self = this;
             // enable MutationOberver if it's supported
             var MutationObserver = window.MutationObserver || window.WebKitMutationObserver || window.MozMutationObserver;
             if (MutationObserver) {
-                var observer = new MutationObserver(function(mutations) {
-                    mutations.forEach(function(mutation) {
+                var observer = new MutationObserver(function (mutations) {
+                    mutations.forEach(function (mutation) {
                         if (mutation.addedNodes.length > 0) {
                             self._onNodesChanged(mutation.addedNodes, 'Added');
                         }
@@ -162,10 +162,10 @@
                         }
                     });
                 });
-                observer.observe(document, { 
-                    childList: true, 
-                    subtree:true 
-                });        
+                observer.observe(document, {
+                    childList: true,
+                    subtree: true
+                });
 
             } else {
                 // use MutationEvents as fallback 
@@ -175,7 +175,7 @@
                 document.addEventListener('DOMNodeRemoved', function nrLstnr(e) {
                     self._onNodesChanged([e.target], 'Removed');
                 });
-            }        
+            }
         },
         
         /* 
@@ -184,31 +184,31 @@
         * @return {Array} import import-ed StyleSheets
         * TODO: recursive check of @imports  
         */
-        _scanImports: function(styleSheet) {
+        _scanImports: function (styleSheet) {
             //check for @import rules
-            var imports = [];
-            for (var i=0; i < styleSheet.cssRules.length; i++) {
+            var i, imports = [];
+            for (i = 0; i < styleSheet.cssRules.length; i++) {
                 if (styleSheet.cssRules[i].href) {
                     imports.push(styleSheet.cssRules[i].styleSheet);
                 }
             }
-            return imports;    
+            return imports;
         },
-        /* send an event in case that a related doc was added/removed */ 
-        _onNodesChanged: function(nodes, action) {
-            var self = this;
-            for (var i=0; i<nodes.length; i++) {
+        /* send an event in case that a related doc was added/removed */
+        _onNodesChanged: function (nodes, action) {
+            var i, self = this;
+            for (i = 0; i < nodes.length; i++) {
                 //check for Javascript files
                 if (nodes[i].nodeName === "SCRIPT" && nodes[i].src) {
                     transport.send(JSON.stringify({
-                        type: 'Script.' + action, 
+                        type: 'Script.' + action,
                         src: nodes[i].src
                     }));
                 }
                 //check for stylesheets
                 if (nodes[i].nodeName === "LINK" && nodes[i].rel === "stylesheet" && nodes[i].href) {
                     transport.send(JSON.stringify({
-                        type: 'Stylesheet.' + action, 
+                        type: 'Stylesheet.' + action,
                         href: nodes[i].href
                     }));
                     // TODO: check for @import rules. 
@@ -220,14 +220,14 @@
             }
         },
         
-        stop: function() {}
+        stop: function () {}
     };
     
-    window.addEventListener('load', function(){
+    window.addEventListener('load', function () {
         DocumentObserver.start();
     });
     
-    window.addEventListener('unload', function(){
+    window.addEventListener('unload', function () {
         DocumentObserver.stop();
     });
     
