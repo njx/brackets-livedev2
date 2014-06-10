@@ -570,18 +570,13 @@ define(function (require, exports, module) {
                     if (doc && url === _resolveUrl(doc.file.fullPath)) {
                         _setStatus(STATUS_ACTIVE);
                     }
-                    //:TODO - A delay introduced here since sometimes the related docs are not loaded yet at connect
-                    // This is a temp solution.
-                    setTimeout(function () {
-                        var getRelatedPromise;
-                        getRelatedPromise = _liveDocument.getRelated();
-                        getRelatedPromise.done(function (relatedDocs) {
-                            var docs = Object.keys(relatedDocs.stylesheets);
-                            docs.forEach(function (url) {
-                                _styleSheetAdded(null, url);
-                            });
-                        });
-                    }, 500);
+                });
+                $(_liveDocument).on("relatedDocsModified", function (event) {
+                    var relatedDocs = _liveDocument.getRelated();
+                    var docs = Object.keys(relatedDocs.stylesheets);
+                    docs.forEach(function (url) {
+                        _styleSheetAdded(null, url);
+                    });
                 });
             } else {
                 console.error("LiveDevelopment._open(): No server active");

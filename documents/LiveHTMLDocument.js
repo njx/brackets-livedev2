@@ -298,6 +298,7 @@ define(function (require, exports, module) {
         switch (msg.type) {
         case "Document.Related":
             this._relatedDocuments = msg.related;
+            $(this).triggerHandler("relatedDocsModified");
             break;
         case "Stylesheet.Added":
             this._relatedDocuments.stylesheets[msg.href] = true;
@@ -325,19 +326,7 @@ define(function (require, exports, module) {
     };
 
     LiveHTMLDocument.prototype.getRelated = function () {
-        var getRelatedPromise;
-        var clientId = this.getConnectionIds()[0]; // Using the first client to fine related docs
-        getRelatedPromise = new $.Deferred();
-        this.protocol.getRelated([clientId])
-            .then(function (msg) {
-                this._relatedDocuments = JSON.parse(msg.related);
-                getRelatedPromise.resolve(this._relatedDocuments);
-            })
-            .fail(function (err) {
-                console.log("error trying to get related documents:" + err);
-                getRelatedPromise.reject("error trying to get related documents:" + err);
-            });
-        return getRelatedPromise;
+        return this._relatedDocuments;
     };
     // Export the class
     module.exports = LiveHTMLDocument;
