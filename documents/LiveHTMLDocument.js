@@ -282,7 +282,6 @@ define(function (require, exports, module) {
         }
     };
     
-    
     /**
      * @private
      * Handles message received from the browser.
@@ -292,33 +291,32 @@ define(function (require, exports, module) {
      * TODO: we should have a better extensible way to register handlers for different message types (subscribe?).
      */
     LiveHTMLDocument.prototype._onMessage = function (event, clientId, msg) {
-        
         switch (msg.type) {
-            case "Document.Related":
-                this._relatedDocuments = msg.related;
-                break;
-            case "Stylesheet.Added":
-                this._relatedDocuments.stylesheets[msg.href] = true;
-                break;
-            case "Stylesheet.Removed":
-                delete(this._relatedDocuments.stylesheets[msg.href]);
-                break;
-            case "Script.Added":
-                this._relatedDocuments.scripts[msg.src] = true;
-                break;
-            case "Script.Removed":
-                delete(this._relatedDocuments.scripts[msg.src]);
-                break;                
+        case "Document.Related":
+            this._relatedDocuments = msg.related;
+            break;
+        case "Stylesheet.Added":
+            this._relatedDocuments.stylesheets[msg.href] = true;
+            break;
+        case "Stylesheet.Removed":
+            delete (this._relatedDocuments.stylesheets[msg.href]);
+            break;
+        case "Script.Added":
+            this._relatedDocuments.scripts[msg.src] = true;
+            break;
+        case "Script.Removed":
+            delete (this._relatedDocuments.scripts[msg.src]);
+            break;
         }
     };
     
      /**
-     * For the given path, check if the document is related to te live HTML document.
+     * For the given path, check if the document is related to the live HTML document.
      * Related means that is an external Javascript or CSS file that is included as part of the DOM.
      * @param {String} fullPath.
      * @return {boolean} - is related or not.
      */
-    LiveHTMLDocument.prototype.isRelated = function(fullPath) {
+    LiveHTMLDocument.prototype.isRelated = function (fullPath) {
         return (this._relatedDocuments.scripts[this.urlResolver(fullPath)] || this._relatedDocuments.stylesheets[this.urlResolver(fullPath)]);
     };
 
