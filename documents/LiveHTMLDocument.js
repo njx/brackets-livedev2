@@ -298,7 +298,6 @@ define(function (require, exports, module) {
         switch (msg.type) {
         case "Document.Related":
             this._relatedDocuments = msg.related;
-            $(this).triggerHandler("relatedDocsModified");
             break;
         case "Stylesheet.Added":
             this._relatedDocuments.stylesheets[msg.href] = true;
