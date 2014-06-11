@@ -56,7 +56,7 @@
         
         /*  Retrieves related documents (external CSS and JS files) */
         related: function () {
-            var i, j, k;
+            var i, j;
             var related = {
                 scripts: {},
                 stylesheets: {}
@@ -69,19 +69,23 @@
                 }
             }
             //iterate on document.stylesheets (StyleSheetList doesn't provide forEach iterator).
-            for (j = 0; j < document.styleSheets.length; j++) {
-                var s = document.styleSheets[j];
+            for (i = 0; i < document.styleSheets.length; i++) {
+                var s = document.styleSheets[i];
                 if (s.href) {
                     related.stylesheets[s.href] = true;
                 }
-                //add @imports to related and populate this._imports for tracking changes.
-                var sheets = this._scanImports(s);
-                if (sheets.length > 0) {
-                    this._imports[s.href] = [];
-                    for (k = 0; k < sheets.length; k++) {
-                        related.stylesheets[sheets[k].href] = true;
-                        this._imports[s.href].push(sheets[k].href);
+                //extract @imports.
+                var imports = this._scanImports(s);
+                
+                for (j = 0; j < imports.length; j++) {
+                    // add @imports to related 
+                    related.stylesheets[imports[j]] = true;
+                    // add @imports to this._imports 
+                    // need to keep them for notifying changes.
+                    if (!this._imports[s.href]) {
+                        this._imports[s.href] = [];
                     }
+                    this._imports[s.href].push(imports[j]);
                 }
             }
             return related;
@@ -121,16 +125,15 @@
         /* 
         * Extract styleSheets included in CSSImportRules.
         * @param {Object} stylesheet
-        * @return {Array} import import-ed StyleSheets
-        * TODO: recursive check of @imports  
+        * @return {Array} hrefs of import-ed StyleSheets
+        * TODO: check for nested @imports  
         */
         _scanImports: function (styleSheet) {
-            //check for @import rules
             var i,
                 imports = [];
             for (i = 0; i < styleSheet.cssRules.length; i++) {
                 if (styleSheet.cssRules[i].href) {
-                    imports.push(styleSheet.cssRules[i].styleSheet);
+                    imports.push(styleSheet.cssRules[i].styleSheet.href);
                 }
             }
             return imports;
