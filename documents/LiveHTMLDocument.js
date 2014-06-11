@@ -282,7 +282,6 @@ define(function (require, exports, module) {
         }
     };
     
-    
     /**
      * @private
      * Handles message received from the browser.
@@ -292,7 +291,6 @@ define(function (require, exports, module) {
      * TODO: we should have a better extensible way to register handlers for different message types (subscribe?).
      */
     LiveHTMLDocument.prototype._onMessage = function (event, clientId, msg) {
-        
         switch (msg.type) {
         case "Document.Related":
             this._relatedDocuments = msg.related;
@@ -313,7 +311,7 @@ define(function (require, exports, module) {
     };
     
      /**
-     * For the given path, check if the document is related to te live HTML document.
+     * For the given path, check if the document is related to the live HTML document.
      * Related means that is an external Javascript or CSS file that is included as part of the DOM.
      * @param {String} fullPath.
      * @return {boolean} - is related or not.
