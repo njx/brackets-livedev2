@@ -128,12 +128,12 @@
         /* 
         * Extract styleSheets included in CSSImportRules.
         * @param {Object} stylesheet
-        * @return {Array} import import-ed StyleSheets
-        * TODO: recursive check of @imports  
+        * @return {Array} hrefs of import-ed StyleSheets
+        * TODO: check for nested @imports  
         */
         _scanImports: function (styleSheet) {
-            //check for @import rules
-            var i, imports = [];
+            var i,
+                imports = [];
             for (i = 0; i < styleSheet.cssRules.length; i++) {
                 if (styleSheet.cssRules[i].href) {
                     imports.push(styleSheet.cssRules[i].styleSheet);
@@ -143,7 +143,8 @@
         },
         /* send an event in case that a related doc was added/removed */
         _onNodesChanged: function (nodes, action) {
-            var i, self = this;
+            var i,
+                self = this;
             for (i = 0; i < nodes.length; i++) {
                 //check for Javascript files
                 if (nodes[i].nodeName === "SCRIPT" && nodes[i].src) {
