@@ -37,59 +37,6 @@
     //     send(msgStr) - sends the given message string over the transport.
     var transport = global._Brackets_LiveDev_Transport;
     
-    /**
-     * The remote handler for the protocol.
-     */
-    var ProtocolHandler = {
-        /**
-         * Handles a message from the transport. Parses it as JSON and looks at the
-         * "method" field to determine what the action is.
-         * @param {msgStr} string The protocol message as stringified JSON.
-         */
-        message: function (msgStr) {
-            console.log("received: " + msgStr);
-            var msg = JSON.parse(msgStr);
-            
-            // TODO: more easily extensible way of adding protocol handler methods
-            if (msg.method === "Runtime.evaluate") {
-                console.log("evaluating: " + msg.params.expression);
-                var result = eval(msg.params.expression);
-                console.log("result: " + result);
-                this.respond(msg, {
-                    result: JSON.stringify(result) // TODO: in original protocol this is an object handle
-                });
-            }
-            //DocumentWatcher should probably register this method.
-            if (msg.method === "Document.Related") {
-                console.log("Document.Related");
-                var related = DocumentObserver.related();
-                this.respond(msg, {
-                    related: JSON.stringify(related)
-                });
-            }
-        },
-        
-        /**
-         * Responds to a message, setting the response message's ID to the same ID as the
-         * original request.
-         * @param {Object} orig The original message object.
-         * @param {Object} response The response message object.
-         */
-        respond: function (orig, response) {
-            response.id = orig.id;
-            transport.send(JSON.stringify(response));
-        }
-    };
-    
-    // By the time this executes, there must already be an active transport.
-    if (!transport) {
-        console.error("[Brackets LiveDev] No transport set");
-        return;
-    }
-    
-    transport.setCallbacks(ProtocolHandler);
-    
-    
     //TODO: Protocol should probably have a method addWatcher to dynamically inject oberservers
     var DocumentObserver = {
         
@@ -222,6 +169,59 @@
         
         stop: function () {}
     };
+
+    /**
+     * The remote handler for the protocol.
+     */
+    var ProtocolHandler = {
+        /**
+         * Handles a message from the transport. Parses it as JSON and looks at the
+         * "method" field to determine what the action is.
+         * @param {msgStr} string The protocol message as stringified JSON.
+         */
+        message: function (msgStr) {
+            console.log("received: " + msgStr);
+            var msg = JSON.parse(msgStr);
+            
+            // TODO: more easily extensible way of adding protocol handler methods
+            if (msg.method === "Runtime.evaluate") {
+                console.log("evaluating: " + msg.params.expression);
+                var result = eval(msg.params.expression);
+                console.log("result: " + result);
+                this.respond(msg, {
+                    result: JSON.stringify(result) // TODO: in original protocol this is an object handle
+                });
+            }
+            //DocumentWatcher should probably register this method.
+            if (msg.method === "Document.Related") {
+                console.log("Document.Related");
+                var related = DocumentObserver.related();
+                this.respond(msg, {
+                    related: JSON.stringify(related)
+                });
+            }
+        },
+        
+        /**
+         * Responds to a message, setting the response message's ID to the same ID as the
+         * original request.
+         * @param {Object} orig The original message object.
+         * @param {Object} response The response message object.
+         */
+        respond: function (orig, response) {
+            response.id = orig.id;
+            transport.send(JSON.stringify(response));
+        }
+    };
+    
+    // By the time this executes, there must already be an active transport.
+    if (!transport) {
+        console.error("[Brackets LiveDev] No transport set");
+        return;
+    }
+    
+    transport.setCallbacks(ProtocolHandler);
+    
     
     window.addEventListener('load', function () {
         DocumentObserver.start();
