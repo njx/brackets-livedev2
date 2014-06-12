@@ -336,7 +336,6 @@ define(function (require, exports, module) {
         // Also, the stylesheet may already exist and be reported as added twice
         // due to Chrome reporting added/removed events after incremental changes
         // are pushed to the browser
-        console.log("styleSheetAdded: " + url);
         if (!path || alreadyAdded) {
             return;
         }
