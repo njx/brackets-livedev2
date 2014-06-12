@@ -26,25 +26,24 @@
 /*global define, $, window, navigator, Node, console */
 
 /**
- * RemoteFunctions2 define the functions to be executed in the browser. This
- * modules should define a single function that returns an object of all
- * exported functions.
+ * ExtendRemoteFunctions defines the addtional functions to be executed in the browser. 
  */
-function AddtoRemoteFunctions(obj) {
+function ExtendRemoteFunctions(obj) {
     "use strict";
 
-    var A = function () {};
-    A.prototype = obj;
+    var ExtendedObj = function () {};
+    ExtendedObj.prototype = obj;
 
     var reloadCSSCounter = 0;
     
-    A.prototype.reloadCSS = function reloadCSS(url) {
-        var i, links = document.getElementsByTagName('link'), link, found = false;
+    ExtendedObj.prototype.reloadCSS = function reloadCSS(url) {
+        var i,
+            links = document.getElementsByTagName('link'),
+            link,
+            found = false;
         reloadCSSCounter++;
         
         function updateCSS(url, link) {
-            //console.log("CSS reloading: "+link.href);
-
             // a. for Firefox
             link.href = url + "?count=" + reloadCSSCounter; // added string so firefox won't cache
 
@@ -52,24 +51,13 @@ function AddtoRemoteFunctions(obj) {
             // b. for Chrome
             // The following is needed so Chrome refreshes!
             // The side effect of this is that it flickers since it removes the element first
+            //:TODO: Try to see if there's a way to get it to work on Chrome without flickering
 
             var parent = link.parentNode;
             var next = link.nextElementSibling;
             parent.removeChild(link);   // also tried link.disabled = true;
             parent.insertBefore(link, next);
 
-            //:TODO: Try to see if there's a way to get it to work on Chrome without flickering
-            // tried the following, but it either still flickers in Chrome, or does not refresh the page until you move
-            // the mouse over the browser window.
-            /*
-            var parent = link.parentNode;
-            var link2 = document.createElement("link");
-            link2.rel = link.rel;
-            link2.href = link.href;
-            link2.setAttribute('data-brackets-id', link.getAttribute('data-brackets-id'));
-            parent.insertBefore(link2, link.nextSibling);
-            parent.removeChild(link);
-            */
         }
         
         if (links.length) {
@@ -99,5 +87,5 @@ function AddtoRemoteFunctions(obj) {
         }
     };
 
-    return new A();
+    return new ExtendedObj();
 }
