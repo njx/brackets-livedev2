@@ -41,7 +41,7 @@ define(function (require, exports, module) {
         _                   = brackets.getModule("thirdparty/lodash"),
         LiveDocument        = require("documents/LiveDocument"),
         HTMLInstrumentation = require("language/HTMLInstrumentation"),
-        AddedRemoteFunctions = require("text!protocol/remote/MoreRemoteFunctions.js");
+        AddedRemoteFunctions = require("text!protocol/remote/ExtendedRemoteFunctions.js");
 
 
     /**
