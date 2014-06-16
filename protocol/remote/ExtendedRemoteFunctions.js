@@ -34,58 +34,29 @@ function ExtendRemoteFunctions(obj) {
     var ExtendedObj = function () {};
     ExtendedObj.prototype = obj;
 
-    var reloadCSSCounter = 0;
-    
-    ExtendedObj.prototype.reloadCSS = function reloadCSS(url) {
+    ExtendedObj.prototype.reloadCSS = function reloadCSS(url, text) {
         var i,
-            links = document.getElementsByTagName('link'),
-            link,
-            found = false;
-        reloadCSSCounter++;
-        
-        function updateCSS(url, link) {
-            // a. for Firefox
-            link.href = url + "?count=" + reloadCSSCounter; // added string so firefox won't cache
+            node;
 
-            //:TODO: Add browser check and do the following only for Chrome (also test with other browsers)
-            // b. for Chrome
-            // The following is needed so Chrome refreshes!
-            // The side effect of this is that it flickers since it removes the element first
-            //:TODO: Try to see if there's a way to get it to work on Chrome without flickering
+        var head = document.getElementsByTagName('head')[0];
+        // create an style element to replace the one loaded with <link>
+        var s = document.createElement('style');
+        s.type = 'text/css';
+        s.appendChild(document.createTextNode(text));
 
-            var parent = link.parentNode;
-            var next = link.nextElementSibling;
-            parent.removeChild(link);   // also tried link.disabled = true;
-            parent.insertBefore(link, next);
-
-        }
-        
-        if (links.length) {
-            for (i = 0; i < links.length; i++) {
-                link = links[i];
-                if (link.href === url || link.href.indexOf(url + "?count=") === 0) {  // if the link starts with the url of the CSS file
-                    // update the CSS
-                    updateCSS(url, link);
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) { // Did not find the url in any of the linked files
-                // Assume the file is loaded through @import
-                // Since we don't know which one, reload all of them
-                // This is kind of a hack to support @import for now
-                //:TODO: We can pass the base links from the related docs instead of the 
-                //imported file url to avoid this case.
-                // Note: This works in Chrome, but not in Firefox since FF caches the imported files
-                //:TODO: To make in work for FF, need to parse the CSS files and add a query to the imports
-                // for example change @import url(a.css) to @import url(a.css?count=xyz)
-                for (i = 0; i < links.length; i++) {
-                    link = links[i];
-                    updateCSS(link.href.substring(0, link.href.indexOf("?count=")) || link.href, link);
-                }
+        for (i = 0; i < document.styleSheets.length; i++) {
+            node = document.styleSheets[i];
+            if (node.href === url) {
+                // if the link element to change 
+                head.appendChild(s); // insert the style element here
+                node.disabled = true;
+                console.log('creating');
+            } else if (node.href !== url && node.ownerNode.id === url) {
+                // now can remove the style element previously created (if any)
+                node.ownerNode.parentNode.removeChild(node.ownerNode);
             }
         }
+        s.id = url;
     };
-
     return new ExtendedObj();
 }

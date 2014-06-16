@@ -59,11 +59,12 @@ define(function (require, exports, module) {
      *     If not specified initially, the LiveDocument will connect to the editor for the given document
      *     when it next becomes the active editor.
      */
-    function LiveDocument(protocol, urlResolver, doc, editor, connections) {
+    function LiveDocument(protocol, urlResolver, doc, editor, connections, roots) {
         this.protocol = protocol;
         this.urlResolver = urlResolver;
         this.doc = doc;
         this.connections = connections || {};
+        this.roots = roots || [];
         
         this._onConnect = this._onConnect.bind(this);
         this._onClose = this._onClose.bind(this);

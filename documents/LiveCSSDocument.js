@@ -62,7 +62,7 @@ define(function LiveCSSDocumentModule(require, exports, module) {
      *     If not specified initially, the LiveDocument will connect to the editor for the given document
      *     when it next becomes the active editor.
      */
-    var LiveCSSDocument = function LiveCSSDocument(protocol, urlResolver, doc, editor, connections) {
+    var LiveCSSDocument = function LiveCSSDocument(protocol, urlResolver, doc, editor, connections, roots) {
         LiveDocument.apply(this, arguments);
         
         // Add a ref to the doc since we're listening for change events
@@ -121,14 +121,27 @@ define(function LiveCSSDocumentModule(require, exports, module) {
      * When the user edits the file, update the stylesheet in the browser and redraw highlights.
      */
     LiveCSSDocument.prototype._updateBrowser = function () {
-        // TODO Need to add protocol API to replace associated stylesheet at runtime with the current
-        // text of the document.
-        
-        this.protocol.evaluate(this.getConnectionIds(), "_LD.reloadCSS(" + JSON.stringify(this.doc.url) + ")");
-
+        var i;
+        for (i = 0; i < this.roots.length; i++) {
+            if (this.doc.url !== this.roots[i]) {
+                // if it's not directly included through <link>,
+                // reload the original doc
+                $(this).triggerHandler("updateDoc", this.roots[0]);
+            } else {
+                this.protocol.evaluate(this.getConnectionIds(), "_LD.reloadCSS(" +
+                                       JSON.stringify(this.doc.url) + ", " +
+                                       JSON.stringify(this.doc.getText()) + ")");
+            }
+        }
         this.redrawHighlights();
     };
 
+    /**
+     * Update the stylesheet in the browser and redraw highlights.
+     */
+    LiveCSSDocument.prototype.updateBrowser = function () {
+        this._updateBrowser();
+    };
     /**
      * @override
      * Update the highlights in the browser based on the cursor position.

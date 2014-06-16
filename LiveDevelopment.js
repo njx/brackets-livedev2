@@ -286,11 +286,12 @@ define(function (require, exports, module) {
      * @param {Document} doc
      * @param {Editor} editor
      * @param {Connections} connections
+     * @param {roots} roots
      * @return {?LiveDocument} The live document, or null if this type of file doesn't support live editing.
      */
-    function _createLiveDocument(doc, editor, connections) {
+    function _createLiveDocument(doc, editor, connections, roots) {
         var DocClass        = _classForDocument(doc),
-            liveDocument    = new DocClass(_protocol, _resolveUrl, doc, editor, connections);
+            liveDocument    = new DocClass(_protocol, _resolveUrl, doc, editor, connections, roots);
 
         if (!DocClass) {
             return null;
@@ -327,8 +328,9 @@ define(function (require, exports, module) {
      * this notification on the browser side.
      * @param {$.Event} event
      * @param {string} url The URL of the stylesheet that was added.
+     * @param {array} roots The URLs of the roots of the stylesheet (the css files loaded through <link>)
      */
-    function _styleSheetAdded(event, url) {
+    function _styleSheetAdded(event, url, roots) {
         var path = _server && _server.urlToPath(url),
             alreadyAdded = !!_relatedDocuments[url];
 
@@ -345,12 +347,17 @@ define(function (require, exports, module) {
         docPromise.done(function (doc) {
             if ((_classForDocument(doc) === LiveCSSDocument) &&
                     (!_liveDocument || (doc !== _liveDocument.doc))) {
-                var liveDoc = _createLiveDocument(doc, null, _liveDocument.connections);
+                var liveDoc = _createLiveDocument(doc, null, _liveDocument.connections, roots);
                 if (liveDoc) {
                     _server.add(liveDoc);
                     _relatedDocuments[doc.url] = liveDoc;
                     _setStatus(STATUS_ACTIVE); // since opening one of the related docs
                     $(liveDoc).on("deleted.livedev", _handleRelatedDocumentDeleted);
+                    $(liveDoc).on("updateDoc", function (event, url) {
+                        var path = _server.urlToPath(url),
+                            doc = getLiveDocForPath(path);
+                        doc.updateBrowser();
+                    });
                 }
             }
         });
@@ -576,7 +583,7 @@ define(function (require, exports, module) {
                         var relatedDocs = msg.related;
                         var docs = Object.keys(relatedDocs.stylesheets);
                         docs.forEach(function (url) {
-                            _styleSheetAdded(null, url);
+                            _styleSheetAdded(null, url, relatedDocs.stylesheets[url]);
                         });
                         break;
                     }
