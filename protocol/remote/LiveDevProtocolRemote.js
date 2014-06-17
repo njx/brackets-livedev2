@@ -37,137 +37,6 @@
     //     send(msgStr) - sends the given message string over the transport.
     var transport = global._Brackets_LiveDev_Transport;
     
-    //TODO: Protocol should probably have a method addWatcher to dynamically inject oberservers
-    var DocumentObserver = {
-        
-        // @imports references for tracking changes
-        _imports : {},
-        
-        /* init hook. */
-        start:  function () {
-            //start listening to node changes
-            this._enableListeners();
-            //send the current status of related docs. 
-            transport.send(JSON.stringify({
-                type: "Document.Related",
-                related: this.related()
-            }));
-        },
-        
-        /*  Retrieves related documents (external CSS and JS files) */
-        related: function () {
-            var i, j;
-            var related = {
-                scripts: {},
-                stylesheets: {}
-            };
-            //iterate on document scripts (HTMLCollection doesn't provide forEach iterator).
-            for (i = 0; i < document.scripts.length; i++) {
-                //add only external scripts
-                if (document.scripts[i].src) {
-                    related.scripts[document.scripts[i].src] = true;
-                }
-            }
-            //iterate on document.stylesheets (StyleSheetList doesn't provide forEach iterator).
-            for (i = 0; i < document.styleSheets.length; i++) {
-                var s = document.styleSheets[i];
-                if (s.href) {
-                    related.stylesheets[s.href] = true;
-                }
-                //extract @imports.
-                var imports = this._scanImports(s);
-                
-                for (j = 0; j < imports.length; j++) {
-                    // add @imports to related 
-                    related.stylesheets[imports[j]] = true;
-                    // add @imports to this._imports 
-                    // need to keep them for notifying changes.
-                    if (!this._imports[s.href]) {
-                        this._imports[s.href] = [];
-                    }
-                    this._imports[s.href].push(imports[j]);
-                }
-            }
-            return related;
-        },
-        
-        _enableListeners: function () {
-            var self = this;
-            // enable MutationOberver if it's supported
-            var MutationObserver = window.MutationObserver || window.WebKitMutationObserver || window.MozMutationObserver;
-            if (MutationObserver) {
-                var observer = new MutationObserver(function (mutations) {
-                    mutations.forEach(function (mutation) {
-                        if (mutation.addedNodes.length > 0) {
-                            self._onNodesChanged(mutation.addedNodes, 'Added');
-                        }
-                        if (mutation.removedNodes.length > 0) {
-                            self._onNodesChanged(mutation.removedNodes, 'Removed');
-                        }
-                    });
-                });
-                observer.observe(document, {
-                    childList: true,
-                    subtree: true
-                });
-
-            } else {
-                // use MutationEvents as fallback 
-                document.addEventListener('DOMNodeInserted', function niLstnr(e) {
-                    self._onNodesChanged([e.target], 'Added');
-                });
-                document.addEventListener('DOMNodeRemoved', function nrLstnr(e) {
-                    self._onNodesChanged([e.target], 'Removed');
-                });
-            }
-        },
-        
-        /* 
-        * Extract styleSheets included in CSSImportRules.
-        * @param {Object} stylesheet
-        * @return {Array} hrefs of import-ed StyleSheets
-        * TODO: check for nested @imports  
-        */
-        _scanImports: function (styleSheet) {
-            var i,
-                imports = [];
-            for (i = 0; i < styleSheet.cssRules.length; i++) {
-                if (styleSheet.cssRules[i].href) {
-                    imports.push(styleSheet.cssRules[i].styleSheet.href);
-                }
-            }
-            return imports;
-        },
-        /* send an event in case that a related doc was added/removed */
-        _onNodesChanged: function (nodes, action) {
-            var i,
-                self = this;
-            for (i = 0; i < nodes.length; i++) {
-                //check for Javascript files
-                if (nodes[i].nodeName === "SCRIPT" && nodes[i].src) {
-                    transport.send(JSON.stringify({
-                        type: 'Script.' + action,
-                        src: nodes[i].src
-                    }));
-                }
-                //check for stylesheets
-                if (nodes[i].nodeName === "LINK" && nodes[i].rel === "stylesheet" && nodes[i].href) {
-                    transport.send(JSON.stringify({
-                        type: 'Stylesheet.' + action,
-                        href: nodes[i].href
-                    }));
-                    // TODO: check for @import rules. 
-                    // It seems that node we get from MutationRecord doesn't have the entire information:
-                    //  - Added stylesheet has import rules (wich give us relative URL) but in Chrome, 
-                    //    the stylesheet to be imported is not yet loaded (sheet=null). 
-                    //  - Removed stylesheet also has sheet=null since it was proabably already removed.
-                }
-            }
-        },
-        
-        stop: function () {}
-    };
-    
     /**
      * The remote handler for the protocol.
      */
@@ -188,14 +57,6 @@
                 console.log("result: " + result);
                 this.respond(msg, {
                     result: JSON.stringify(result) // TODO: in original protocol this is an object handle
-                });
-            }
-            //DocumentWatcher should probably register this method.
-            if (msg.method === "Document.Related") {
-                console.log("Document.Related");
-                var related = DocumentObserver.related();
-                this.respond(msg, {
-                    related: JSON.stringify(related)
                 });
             }
         },
@@ -219,13 +80,5 @@
     }
     
     transport.setCallbacks(ProtocolHandler);
-    
-    window.addEventListener('load', function () {
-        DocumentObserver.start();
-    });
-    
-    window.addEventListener('unload', function () {
-        DocumentObserver.stop();
-    });
-    
+
 }(this));
