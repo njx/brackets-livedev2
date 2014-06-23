@@ -577,16 +577,12 @@ define(function (require, exports, module) {
                         _setStatus(STATUS_ACTIVE);
                     }
                 });
-                $(_protocol).on("event", function (event, clientId, msg) {
-                    switch (msg.type) {
-                    case "Document.Related":
-                        var relatedDocs = msg.related;
-                        var docs = Object.keys(relatedDocs.stylesheets);
-                        docs.forEach(function (url) {
-                            _styleSheetAdded(null, url, relatedDocs.stylesheets[url]);
-                        });
-                        break;
-                    }
+                $(_protocol).on("Document.Related", function (event, clientId, msg) {
+                    var relatedDocs = msg.related;
+                    var docs = Object.keys(relatedDocs.stylesheets);
+                    docs.forEach(function (url) {
+                        _styleSheetAdded(null, url, relatedDocs.stylesheets[url]);
+                    });
                 });
             } else {
                 console.error("LiveDevelopment._open(): No server active");

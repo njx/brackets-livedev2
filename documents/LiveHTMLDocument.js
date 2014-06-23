@@ -67,8 +67,21 @@ define(function (require, exports, module) {
         this._onChange = this._onChange.bind(this);
         $(this.doc).on("change", this._onChange);
         
-        this._onMessage = this._onMessage.bind(this);
-        $(this.protocol).on("event", this._onMessage);
+        this._onRelated = this._onRelated.bind(this);
+        $(this.protocol).on("Document.Related", this._onRelated);
+        
+        this._onStylesheetAdded = this._onStylesheetAdded.bind(this);
+        $(this.protocol).on("Stylesheet.Added", this._onStylesheetAdded);
+        
+        this._onStylesheetRemoved = this._onStylesheetRemoved.bind(this);
+        $(this.protocol).on("Stylesheet.Removed", this._onStylesheetRemoved);
+        
+        this._onScriptAdded = this._onScriptAdded.bind(this);
+        $(this.protocol).on("Script.Added", this._onScriptAdded);
+        
+        this._onScriptRemoved = this._onScriptRemoved.bind(this);
+        $(this.protocol).on("Script.Removed", this._onScriptRemoved);
+        
     }
     
     LiveHTMLDocument.prototype = Object.create(LiveDocument.prototype);
@@ -293,31 +306,62 @@ define(function (require, exports, module) {
     
     /**
      * @private
-     * Handles message received from the browser.
+     * Handles message Document.Related from the browser.
      * @param {$.Event} event
      * @param {number} clientId
      * @param {Object} msg
-     * TODO: we should have a better extensible way to register handlers for different message types (subscribe?).
      */
-    LiveHTMLDocument.prototype._onMessage = function (event, clientId, msg) {
-        
-        switch (msg.type) {
-        case "Document.Related":
-            this._relatedDocuments = msg.related;
-            break;
-        case "Stylesheet.Added":
-            this._relatedDocuments.stylesheets[msg.href] = true;
-            break;
-        case "Stylesheet.Removed":
-            delete (this._relatedDocuments.stylesheets[msg.href]);
-            break;
-        case "Script.Added":
-            this._relatedDocuments.scripts[msg.src] = true;
-            break;
-        case "Script.Removed":
-            delete (this._relatedDocuments.scripts[msg.src]);
-            break;
-        }
+    LiveHTMLDocument.prototype._onRelated = function (event, clientId, msg) {
+        this._relatedDocuments = msg.related;
+        return;
+    };
+    
+    /**
+     * @private
+     * Handles message Stylesheet.Added from the browser.
+     * @param {$.Event} event
+     * @param {number} clientId
+     * @param {Object} msg
+     */
+    LiveHTMLDocument.prototype._onStylesheetAdded = function (event, clientId, msg) {
+        this._relatedDocuments.stylesheets[msg.href] = true;
+        return;
+    };
+    
+    /**
+     * @private
+     * Handles message Stylesheet.Removed from the browser.
+     * @param {$.Event} event
+     * @param {number} clientId
+     * @param {Object} msg
+     */
+    LiveHTMLDocument.prototype._onStylesheetRemoved = function (event, clientId, msg) {
+        delete (this._relatedDocuments.stylesheets[msg.href]);
+        return;
+    };
+    
+    /**
+     * @private
+     * Handles message Script.Added from the browser.
+     * @param {$.Event} event
+     * @param {number} clientId
+     * @param {Object} msg
+     */
+    LiveHTMLDocument.prototype._onScriptAdded = function (event, clientId, msg) {
+        this._relatedDocuments.scripts[msg.src] = true;
+        return;
+    };
+
+     /**
+     * @private
+     * Handles message Script.Removed from the browser.
+     * @param {$.Event} event
+     * @param {number} clientId
+     * @param {Object} msg
+     */
+    LiveHTMLDocument.prototype._onScriptRemoved = function (event, clientId, msg) {
+        delete (this._relatedDocuments.scripts[msg.src]);
+        return;
     };
     
      /**

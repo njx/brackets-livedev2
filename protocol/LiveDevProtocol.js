@@ -77,6 +77,7 @@ define(function (require, exports, module) {
      */
     function _receive(clientId, msgStr) {
         var msg = JSON.parse(msgStr),
+            event = msg.method || "event",
             deferred;
         if (msg.id) {
             deferred = _responseDeferreds[msg.id];
@@ -89,7 +90,7 @@ define(function (require, exports, module) {
                 }
             }
         } else {
-            $(exports).triggerHandler("event", [clientId, msg]);
+            $(exports).triggerHandler(event, [clientId, msg]);
         }
     }
     
