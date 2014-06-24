@@ -21,7 +21,8 @@
  * 
  */
 
-/*jslint vars: true, plusplus: true, devel: true, nomen: true, indent: 4, maxerr: 50, evil: true */
+/*jslint evil: true */
+
 /*global $, brackets, define, describe, it, xit, expect, beforeEach, afterEach, waitsFor, waitsForDone, runs, window, spyOn, jasmine */
 
 define(function (require, exports, module) {

@@ -20,8 +20,6 @@
  * DEALINGS IN THE SOFTWARE.
  * 
  */
-/*jslint browser: true, vars: true, plusplus: true, devel: true, nomen: true, indent: 4, forin: true, maxerr: 50, regexp: true, evil: true */
-
 
 function DocumentObserver(config) {
     
@@ -31,18 +29,24 @@ function DocumentObserver(config) {
     var _transport;
     var _imports = {};
     
-    /* send an event in case that a related doc was added/removed */
+    /**
+     * Send an event in case that a related doc was added/removed 
+     * 
+     * @param {NodeList} nodes DOM nodes that were modified
+     * @param {string} action "Added" or "Removed"
+     */
     function _onNodesChanged(nodes, action) {
         var i;
         for (i = 0; i < nodes.length; i++) {
-            //check for Javascript files
+            // check for Javascript files
             if (nodes[i].nodeName === "SCRIPT" && nodes[i].src) {
                 _transport.send(JSON.stringify({
                     type: 'Script.' + action,
                     src: nodes[i].src
                 }));
             }
-            //check for stylesheets
+            
+            // check for stylesheets
             if (nodes[i].nodeName === "LINK" && nodes[i].rel === "stylesheet" && nodes[i].href) {
                 _transport.send(JSON.stringify({
                     type: 'Stylesheet.' + action,
@@ -86,11 +90,12 @@ function DocumentObserver(config) {
         }
     }
     
-            /* 
+   /* 
     * Extract styleSheets included in CSSImportRules.
+    * TODO: check for nested @imports  
+    * 
     * @param {Object} stylesheet
     * @return {Array} hrefs of import-ed StyleSheets
-    * TODO: check for nested @imports  
     */
     function _scanImports(styleSheet) {
         var i,
@@ -103,7 +108,11 @@ function DocumentObserver(config) {
         return imports;
     }
     
-    /*  Retrieves related documents (external CSS and JS files) */
+    /**
+     * Retrieves related documents (external CSS and JS files)
+     * 
+     * @return {{scripts: object, stylesheets: object}} Related scripts and stylesheets
+     */
     function related() {
 
         var rel = {
@@ -111,21 +120,21 @@ function DocumentObserver(config) {
             stylesheets: {}
         };
         var i;
-        //iterate on document scripts (HTMLCollection doesn't provide forEach iterator).
+        // iterate on document scripts (HTMLCollection doesn't provide forEach iterator).
         for (i = 0; i < _document.scripts.length; i++) {
-            //add only external scripts
+            // add only external scripts
             if (_document.scripts[i].src) {
                 rel.scripts[_document.scripts[i].src] = true;
             }
         }
           
-        //iterate on document.stylesheets (StyleSheetList doesn't provide forEach iterator).
+        // iterate on document.stylesheets (StyleSheetList doesn't provide forEach iterator).
         for (i = 0; i < _document.styleSheets.length; i++) {
             var s = _document.styleSheets[i];
             if (s.href) {
                 rel.stylesheets[s.href] = true;
             }
-            //extract @imports.
+            // extract @imports.
             var imports = _scanImports(s);
             
             for (i = 0; i < imports.length; i++) {
@@ -142,18 +151,28 @@ function DocumentObserver(config) {
         return rel;
     }
     
+    /**
+     * Start listening for events and send initial related documents message.
+     * 
+     * @param {HTMLDocument} document
+     * @param {object} transport Live development transport connection
+     */
     function start(document, transport) {
         _transport = transport;
         _document = document;
-        //start listening to node changes
+        // start listening to node changes
         _enableListeners();
-        //send the current status of related docs. 
+        // send the current status of related docs. 
         _transport.send(JSON.stringify({
             type: "Document.Related",
             related: related()
         }));
     }
     
+    /**
+     * Stop listening.
+     * TODO currently a no-op.
+     */
     function stop() {
     
     }
