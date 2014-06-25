@@ -89,6 +89,12 @@ define(function (require, exports, module) {
         this.parentClass._onConnect.apply(this, arguments);
         
         if (url === this.urlResolver(this.doc.file.fullPath)) {
+        
+            // Inject DocumentObserver into the browser (tracks related documents)
+            // TODO: register as part of the protocol once we have an extension mechanism
+            var DocumentObserver = require("text!protocol/remote/DocumentObserver.js");
+            self.protocol.evaluate([clientId], "window._DocumentObserver=" + DocumentObserver + "();");
+        
             // TODO: possible race condition if someone tries to access RemoteFunctions before this
             // injection is completed
             brackets.getModule(["text!LiveDevelopment/Agents/RemoteFunctions.js"], function (RemoteFunctions) {
