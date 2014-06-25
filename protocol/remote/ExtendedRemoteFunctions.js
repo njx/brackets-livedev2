@@ -46,14 +46,15 @@ function ExtendRemoteFunctions(obj) {
 
         for (i = 0; i < document.styleSheets.length; i++) {
             node = document.styleSheets[i];
-            if (node.href === url) {
-                // if the link element to change 
-                head.appendChild(s); // insert the style element here
-                node.disabled = true;
-                console.log('creating');
-            } else if (node.href !== url && node.ownerNode.id === url) {
+            if (node.ownerNode.id === url) {
+                head.insertBefore(s, node.ownerNode); // insert the style element here
                 // now can remove the style element previously created (if any)
                 node.ownerNode.parentNode.removeChild(node.ownerNode);
+            } else if (node.href === url  && !node.disabled) {
+                // if the link element to change 
+                head.insertBefore(s, node.ownerNode); // insert the style element here
+                node.disabled = true;
+                i++; // since we have just inserted a stylesheet
             }
         }
         s.id = url;
