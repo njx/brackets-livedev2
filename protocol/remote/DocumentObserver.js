@@ -90,24 +90,6 @@ function DocumentObserver(config) {
         }
     }
     
-   /* 
-    * Extract styleSheets included in CSSImportRules.
-    * TODO: check for nested @imports  
-    * 
-    * @param {Object} stylesheet
-    * @return {Array} hrefs of import-ed StyleSheets
-    */
-    function _scanImports(styleSheet) {
-        var i,
-            imports = [];
-        for (i = 0; i < styleSheet.cssRules.length; i++) {
-            if (styleSheet.cssRules[i].href) {
-                imports.push(styleSheet.cssRules[i].styleSheet.href);
-            }
-        }
-        return imports;
-    }
-    
     /**
      * Retrieves related documents (external CSS and JS files)
      * 
@@ -128,25 +110,26 @@ function DocumentObserver(config) {
             }
         }
           
-        // iterate on document.stylesheets (StyleSheetList doesn't provide forEach iterator).
-        for (i = 0; i < _document.styleSheets.length; i++) {
-            var s = _document.styleSheets[i];
-            if (s.href) {
-                rel.stylesheets[s.href] = true;
-            }
-            // extract @imports.
-            var imports = _scanImports(s);
-            
-            for (i = 0; i < imports.length; i++) {
-                // add @imports to related 
-                rel.stylesheets[imports[i]] = true;
-                // add @imports to this._imports 
-                // need to keep them for notifying changes.
-                if (!_imports[s.href]) {
-                    _imports[s.href] = [];
+        var s, j;
+        //traverse @import rules
+        var traverseRules = function _traverseRules(sheet, base) {
+            var i;
+            if (sheet.href && sheet.cssRules) {
+                if (rel.stylesheets[sheet.href] === undefined) {
+                    rel.stylesheets[sheet.href] = [];
                 }
-                _imports[s.href].push(imports[i]);
+                rel.stylesheets[sheet.href].push(base);
+                for (i = 0; i < sheet.cssRules.length; i++) {
+                    if (sheet.cssRules[i].href) {
+                        traverseRules(sheet.cssRules[i].styleSheet, base);
+                    }
+                }
             }
+        };
+        //iterate on document.stylesheets (StyleSheetList doesn't provide forEach iterator).
+        for (j = 0; j < document.styleSheets.length; j++) {
+            s = document.styleSheets[j];
+            traverseRules(s, s.href);
         }
         return rel;
     }
