@@ -149,6 +149,23 @@
     
     // subscribe handler to method Runtime.evaluate
     MessageBroker.on("Runtime.evaluate", Runtime.evaluate);
+    
+    /**
+     * Page Domain.
+     */
+    var Page = {
+        /**
+         * Reload the current page optionally ignoring cache.
+         * @param {Object} msg
+         */
+        reload: function (msg) {
+            // just reload the page
+            window.location.reload(msg.params.ignoreCache);
+        }
+    };
+         
+    // subscribe handler to method Page.reload
+    MessageBroker.on("Page.reload", Page.reload);
         
     /**
      * The remote handler for the protocol.

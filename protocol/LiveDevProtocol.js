@@ -176,6 +176,26 @@ define(function (require, exports, module) {
     }
     
     /**
+     * Protocol method. Reloads the page that is currently loaded into the browser, optionally ignoring cache.
+     * @param {number|Array.<number>} clients A client ID or array of client IDs that should reload the page.
+     * @param {boolean} ignoreCache If true, browser cache is ignored.
+     * @return {$.Promise} A promise that's resolved with the return value from the first client that responds
+     *      to the method.
+     * TODO: we should probably have a way of returning the results from all clients, not just the first?
+     */
+    function reload(clients, ignoreCache) {
+        return _send(
+            clients,
+            {
+                method: "Page.reload",
+                params: {
+                    ignoreCache: true
+                }
+            }
+        );
+    }
+    
+    /**
      * Closes the connection to the given client. Proxies to the transport.
      * @param {number} clientId
      */
@@ -187,5 +207,6 @@ define(function (require, exports, module) {
     exports.getRemoteScript = getRemoteScript;
     exports.launch = launch;
     exports.evaluate = evaluate;
+    exports.reload = reload;
     exports.close = close;
 });
