@@ -755,18 +755,12 @@ define(function (require, exports, module) {
             return;
         }
         
-        // TODO: check if the given document was requested by the live HTML document,
-        // and if so, reload the page. We used to track this via a CDT event that would fire
-        // whenever the browser was about to make another request. We should figure out whether
-        // we can/want to implement this the same way (by trying to detect when requests are made
-        // from the browser itself and dispatching an event over the protocol), or just try to
-        // detect it on our side by seeing what files the server serves up. (If we allow multiple
-        // documents to be live previewed at once, we'd need to match up the files being
-        // served with their associated main documents, probably via the referrer.)
-        
+        // reload the page if the given document is a JS file related 
+        // to the current live document.
         if (_liveDocument.isRelated(absolutePath)) {
-            //do something
-            console.log("related document saved");
+            if (doc.getLanguage().getId() === "javascript") {
+                _protocol.reload(_liveDocument.getConnectionIds());
+            }
         }
     }
 
