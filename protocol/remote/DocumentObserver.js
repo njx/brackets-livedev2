@@ -41,7 +41,7 @@ function DocumentObserver(config) {
             // check for Javascript files
             if (nodes[i].nodeName === "SCRIPT" && nodes[i].src) {
                 _transport.send(JSON.stringify({
-                    type: 'Script.' + action,
+                    method: 'Script.' + action,
                     src: nodes[i].src
                 }));
             }
@@ -49,7 +49,7 @@ function DocumentObserver(config) {
             // check for stylesheets
             if (nodes[i].nodeName === "LINK" && nodes[i].rel === "stylesheet" && nodes[i].href) {
                 _transport.send(JSON.stringify({
-                    type: 'Stylesheet.' + action,
+                    method: 'Stylesheet.' + action,
                     href: nodes[i].href
                 }));
                 // TODO: check for @import rules. 
@@ -147,7 +147,7 @@ function DocumentObserver(config) {
         _enableListeners();
         // send the current status of related docs. 
         _transport.send(JSON.stringify({
-            type: "Document.Related",
+            method: "Document.Related",
             related: related()
         }));
     }
