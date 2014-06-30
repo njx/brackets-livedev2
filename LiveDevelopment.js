@@ -218,9 +218,10 @@ define(function (require, exports, module) {
      * @param {$.Event} event
      * @param {LiveDocument} liveDoc
      */
-    function _handleRelatedDocumentDeleted(event, liveDoc) {
-        if (_relatedDocuments[liveDoc.doc.url]) {
-            delete _relatedDocuments[liveDoc.doc.url];
+    function _handleRelatedDocumentDeleted(url) {
+        var liveDoc = _relatedDocuments[url];
+        if (liveDoc) {
+            delete _relatedDocuments[url];
         }
             
         if (_server) {
@@ -352,7 +353,7 @@ define(function (require, exports, module) {
                     _server.add(liveDoc);
                     _relatedDocuments[doc.url] = liveDoc;
                     _setStatus(STATUS_ACTIVE); // since opening one of the related docs
-                    $(liveDoc).on("deleted.livedev", _handleRelatedDocumentDeleted);
+                    
                     $(liveDoc).on("updateDoc", function (event, url) {
                         var path = _server.urlToPath(url),
                             doc = getLiveDocForPath(path);
@@ -583,6 +584,13 @@ define(function (require, exports, module) {
                     docs.forEach(function (url) {
                         _styleSheetAdded(null, url, relatedDocs.stylesheets[url]);
                     });
+                });
+                $(_protocol).on("Stylesheet.Added", function (event, clientId, msg) {
+                    _styleSheetAdded(null, msg.href, [msg.href]);
+                });
+                
+                $(_protocol).on("Stylesheet.Removed", function (event, clientId, msg) {
+                    _handleRelatedDocumentDeleted(msg.href);
                 });
             } else {
                 console.error("LiveDevelopment._open(): No server active");
