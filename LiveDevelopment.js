@@ -286,13 +286,12 @@ define(function (require, exports, module) {
      * editor and the browser.
      * @param {Document} doc
      * @param {Editor} editor
-     * @param {Connections} connections
      * @param {roots} roots
      * @return {?LiveDocument} The live document, or null if this type of file doesn't support live editing.
      */
-    function _createLiveDocument(doc, editor, connections, roots) {
+    function _createLiveDocument(doc, editor, roots) {
         var DocClass        = _classForDocument(doc),
-            liveDocument    = new DocClass(_protocol, _resolveUrl, doc, editor, connections, roots);
+            liveDocument    = new DocClass(_protocol, _resolveUrl, doc, editor, roots);
 
         if (!DocClass) {
             return null;
@@ -348,7 +347,7 @@ define(function (require, exports, module) {
         docPromise.done(function (doc) {
             if ((_classForDocument(doc) === LiveCSSDocument) &&
                     (!_liveDocument || (doc !== _liveDocument.doc))) {
-                var liveDoc = _createLiveDocument(doc, null, _liveDocument.connections, roots);
+                var liveDoc = _createLiveDocument(doc, null, roots);
                 if (liveDoc) {
                     _server.add(liveDoc);
                     _relatedDocuments[doc.url] = liveDoc;
@@ -496,6 +495,8 @@ define(function (require, exports, module) {
         if (exports.status !== STATUS_INACTIVE) {
             // Close live documents 
             _closeDocuments();
+            // Close all active connections
+            _protocol.closeAllConnections();
             
             if (_server) {
                 // Stop listening for requests when disconnected
@@ -571,27 +572,32 @@ define(function (require, exports, module) {
                 // our status will transition to ACTIVE once it does so.
                 _protocol.launch(_server.pathToUrl(doc.file.fullPath));
 
-                // TODO: timeout if we don't get a connection within a certain time
-                $(_liveDocument).one("connect", function (event, url) {
-                    var doc = _getCurrentDocument();
-                    if (doc && url === _resolveUrl(doc.file.fullPath)) {
-                        _setStatus(STATUS_ACTIVE);
-                    }
-                });
-                $(_protocol).on("Document.Related", function (event, clientId, msg) {
-                    var relatedDocs = msg.related;
-                    var docs = Object.keys(relatedDocs.stylesheets);
-                    docs.forEach(function (url) {
-                        _styleSheetAdded(null, url, relatedDocs.stylesheets[url]);
+                $(_protocol)
+                    // TODO: timeout if we don't get a connection within a certain time
+                    .on("Connection.connect.livedev", function (event, msg) {
+                        if (_protocol.getConnectionIds().length === 1) {
+                            var doc = _getCurrentDocument();
+                            if (doc && msg.url === _resolveUrl(doc.file.fullPath)) {
+                                _setStatus(STATUS_ACTIVE);
+                            }
+                        }
+                    })
+                    // extract stylesheets and create related LiveCSSDocument instances
+                    .on("Document.Related.livedev", function (event, msg) {
+                        var relatedDocs = msg.related;
+                        var docs = Object.keys(relatedDocs.stylesheets);
+                        docs.forEach(function (url) {
+                            _styleSheetAdded(null, url, relatedDocs.stylesheets[url]);
+                        });
+                    })
+                    // create new LiveCSSDocument if a new stylesheet is added
+                    .on("Stylesheet.Added.livedev", function (event, msg) {
+                        _styleSheetAdded(null, msg.href, [msg.href]);
+                    })
+                    // remove LiveCSSDocument instance when stylesheet is removed
+                    .on("Stylesheet.Removed.livedev", function (event, msg) {
+                        _handleRelatedDocumentDeleted(msg.href);
                     });
-                });
-                $(_protocol).on("Stylesheet.Added", function (event, clientId, msg) {
-                    _styleSheetAdded(null, msg.href, [msg.href]);
-                });
-                
-                $(_protocol).on("Stylesheet.Removed", function (event, clientId, msg) {
-                    _handleRelatedDocumentDeleted(msg.href);
-                });
             } else {
                 console.error("LiveDevelopment._open(): No server active");
             }
@@ -763,7 +769,7 @@ define(function (require, exports, module) {
         // to the current live document.
         if (_liveDocument.isRelated(absolutePath)) {
             if (doc.getLanguage().getId() === "javascript") {
-                _protocol.reload(_liveDocument.getConnectionIds());
+                _protocol.reload();
             }
         }
     }

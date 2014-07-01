@@ -40,8 +40,7 @@ define(function (require, exports, module) {
         StringUtils         = brackets.getModule("utils/StringUtils"),
         _                   = brackets.getModule("thirdparty/lodash"),
         LiveDocument        = require("documents/LiveDocument"),
-        HTMLInstrumentation = require("language/HTMLInstrumentation"),
-        AddedRemoteFunctions = require("text!protocol/remote/ExtendedRemoteFunctions.js");
+        HTMLInstrumentation = require("language/HTMLInstrumentation");
 
 
     /**
@@ -88,39 +87,6 @@ define(function (require, exports, module) {
     LiveHTMLDocument.prototype.constructor = LiveHTMLDocument;
     LiveHTMLDocument.prototype.parentClass = LiveDocument.prototype;
     
-    /**
-     * @private
-     * Handles a connection from a browser page. Injects the RemoteFunctions script via the
-     * live development protocol in order to provide highlighting and live DOM editing functionality.
-     * @param {$.Event} event
-     * @param {number} clientId
-     * @param {string} url
-     */
-    LiveHTMLDocument.prototype._onConnect = function (event, clientId, url) {
-        var self = this;
-        
-        this.parentClass._onConnect.apply(this, arguments);
-        
-        if (url === this.urlResolver(this.doc.file.fullPath)) {
-        
-            // Inject DocumentObserver into the browser (tracks related documents)
-            // TODO: register as part of the protocol once we have an extension mechanism
-            var DocumentObserver = require("text!protocol/remote/DocumentObserver.js");
-            self.protocol.evaluate([clientId], "window._DocumentObserver=" + DocumentObserver + "();");
-        
-            // TODO: possible race condition if someone tries to access RemoteFunctions before this
-            // injection is completed
-            brackets.getModule(["text!LiveDevelopment/Agents/RemoteFunctions.js"], function (RemoteFunctions) {
-                // Inject our remote functions into the browser.
-                var command = "window._LD=" + AddedRemoteFunctions + "(" + RemoteFunctions + "())";
-                // TODO: handle error, wasThrown?
-                self.protocol.evaluate([clientId], command);
-            });
-        }
-        
-        // TODO: race condition if the version of the instrumented HTML that the browser loaded is out of sync with
-        // our current state. Should include a serial number in the instrumented HTML representing the last live edit.
-    };
     
     /**
      * @override
@@ -279,7 +245,7 @@ define(function (require, exports, module) {
             applyEditsPromise;
         
         if (result.edits) {
-            applyEditsPromise = this.protocol.evaluate(this.getConnectionIds(), "_LD.applyDOMEdits(" + JSON.stringify(result.edits) + ")");
+            applyEditsPromise = this.protocol.evaluate("_LD.applyDOMEdits(" + JSON.stringify(result.edits) + ")");
     
             applyEditsPromise.always(function () {
                 if (!isNestedTimer) {
@@ -308,10 +274,9 @@ define(function (require, exports, module) {
      * @private
      * Handles message Document.Related from the browser.
      * @param {$.Event} event
-     * @param {number} clientId
      * @param {Object} msg
      */
-    LiveHTMLDocument.prototype._onRelated = function (event, clientId, msg) {
+    LiveHTMLDocument.prototype._onRelated = function (event, msg) {
         this._relatedDocuments = msg.related;
         return;
     };
@@ -320,10 +285,9 @@ define(function (require, exports, module) {
      * @private
      * Handles message Stylesheet.Added from the browser.
      * @param {$.Event} event
-     * @param {number} clientId
      * @param {Object} msg
      */
-    LiveHTMLDocument.prototype._onStylesheetAdded = function (event, clientId, msg) {
+    LiveHTMLDocument.prototype._onStylesheetAdded = function (event, msg) {
         this._relatedDocuments.stylesheets[msg.href] = true;
         return;
     };
@@ -332,10 +296,9 @@ define(function (require, exports, module) {
      * @private
      * Handles message Stylesheet.Removed from the browser.
      * @param {$.Event} event
-     * @param {number} clientId
      * @param {Object} msg
      */
-    LiveHTMLDocument.prototype._onStylesheetRemoved = function (event, clientId, msg) {
+    LiveHTMLDocument.prototype._onStylesheetRemoved = function (event, msg) {
         delete (this._relatedDocuments.stylesheets[msg.href]);
         return;
     };
@@ -344,10 +307,9 @@ define(function (require, exports, module) {
      * @private
      * Handles message Script.Added from the browser.
      * @param {$.Event} event
-     * @param {number} clientId
      * @param {Object} msg
      */
-    LiveHTMLDocument.prototype._onScriptAdded = function (event, clientId, msg) {
+    LiveHTMLDocument.prototype._onScriptAdded = function (event, msg) {
         this._relatedDocuments.scripts[msg.src] = true;
         return;
     };
@@ -356,10 +318,9 @@ define(function (require, exports, module) {
      * @private
      * Handles message Script.Removed from the browser.
      * @param {$.Event} event
-     * @param {number} clientId
      * @param {Object} msg
      */
-    LiveHTMLDocument.prototype._onScriptRemoved = function (event, clientId, msg) {
+    LiveHTMLDocument.prototype._onScriptRemoved = function (event, msg) {
         delete (this._relatedDocuments.scripts[msg.src]);
         return;
     };

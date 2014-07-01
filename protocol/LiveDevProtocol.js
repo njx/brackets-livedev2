@@ -22,27 +22,40 @@
  */
 
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, indent: 4, forin: true, maxerr: 50, regexp: true */
-/*global define, $, brackets, window, open */
+/*global define, $, brackets, window, open, _ */
 
 /**
  * Provides the protocol that Brackets uses to talk to a browser instance for live development.
  * Protocol methods are converted to a JSON message format, which is then sent over a provided
  * low-level transport and interpreted in the browser. For messages that expect a response, the
- * response is returned through a promise as an object.
+ * response is returned through a promise as an object. Scripts that implement remote logic are
+ * provided during the instrumentation stage by "getRemoteFunctions()".
  *
- * Events raised by the remote browser are dispatched as jQuery "event" events, with the first
- * parameter being the client ID of the remote browser, and the second parameter being the 
- * message object.
+ * Events raised by the remote browser are dispatched as jQuery events which type is equal to the 'method' 
+ * property. The received message object is dispatched as the first parameter and enriched with a 
+ * 'clientId' property being the client ID of the remote browser.
  *
- * Also proxies through the "launch" and "close" methods and the "connect" and "close" events
- * to/from the underlying transport.
+ * It keeps active connections which are  updated when receiving "connect" and "close" from the 
+ * underlying transport. Events "Connection.connect"/"Connection.close" are triggered as 
+ * propagation of transport's "connect"/"close". Also proxies "launch" command to transport.
+ * 
  */
 
 define(function (require, exports, module) {
     "use strict";
     
     // Text of the script we'll inject into the browser that handles protocol requests.
-    var LiveDevProtocolRemote = require("text!protocol/remote/LiveDevProtocolRemote.js");
+    var LiveDevProtocolRemote = require("text!protocol/remote/LiveDevProtocolRemote.js"),
+        DocumentObserver = require("text!protocol/remote/DocumentObserver.js"),
+        AddedRemoteFunctions = require("text!protocol/remote/ExtendedRemoteFunctions.js"),
+        RemoteFunctions = brackets.getModule("text!LiveDevelopment/Agents/RemoteFunctions.js");
+    
+    /**
+     * @private
+     * Active connections.
+     * @type {Object}
+     */
+    var _connections = {};
     
     /**
      * @private
@@ -64,6 +77,14 @@ define(function (require, exports, module) {
      * @type {Object}
      */
     var _responseDeferreds = {};
+    
+    /**
+     * Returns an array of the client IDs that are being managed by this live document.
+     * @return {Array.<number>}
+     */
+    function getConnectionIds() {
+        return Object.keys(_connections);
+    }
     
     /**
      * @private
@@ -90,7 +111,9 @@ define(function (require, exports, module) {
                 }
             }
         } else {
-            $(exports).triggerHandler(event, [clientId, msg]);
+            // enrich received message with clientId
+            msg.clientId = clientId;
+            $(exports).triggerHandler(event, msg);
         }
     }
     
@@ -98,19 +121,54 @@ define(function (require, exports, module) {
      * @private
      * Dispatches a message to the remote protocol handler via the transport.
      *
+     * @param {Object} msg The message to send.
      * @param {number|Array.<number>} idOrArray ID or IDs of the client(s) that should
      *     receive the message.
-     * @param {Object} msg The message to send.
      * @return {$.Promise} A promise that's fulfilled when the response to the message is received.
      */
-    function _send(clients, msg) {
+    function _send(msg, clients) {
         var id = _nextMsgId++,
             result = new $.Deferred();
+        
+        // broadcast if there are no specific clients
+        clients = clients || getConnectionIds();
         msg.id = id;
         _responseDeferreds[id] = result;
         _transport.send(clients, JSON.stringify(msg));
         return result.promise();
     }
+    
+     /**
+     * @private
+     * Handles when a connection is made to the live development protocol handler.
+     * Injects the RemoteFunctions script in order to provide highlighting and live DOM editing functionality.
+     * Records the connection's client ID and triggers the "Coonnection.connect" event.
+     * @param {number} clientId
+     * @param {string} url
+     */
+    function _connect(clientId, url) {
+        // add new connections
+        // TODO: check URL
+        _connections[clientId] = true;
+
+        $(exports).triggerHandler("Connection.connect", {
+            clientId: clientId,
+            url: url
+        });
+    }
+    
+    /**
+     * @private
+     * Handles when a connection is closed.
+     * @param {number} clientId
+     */
+    function _close(clientId) {
+        delete _connections[clientId];
+        $(exports).triggerHandler("Connection.close", {
+            clientId: clientId
+        });
+    }
+    
     
     /**
      * Sets the transport that should be used by the protocol. See `LiveDevelopment.setTransport()`
@@ -124,14 +182,30 @@ define(function (require, exports, module) {
         _transport = transport;
         $(_transport)
             .on("connect.livedev", function (event, clientId, url) {
-                $(exports).triggerHandler("connect", [clientId, url]);
+                _connect(clientId, url);
             })
             .on("message.livedev", function (event, clientId, msg) {
                 _receive(clientId, msg);
             })
             .on("close.livedev", function (event, clientId) {
-                $(exports).triggerHandler("close", [clientId]);
+                _close(clientId);
             });
+    }
+    
+    
+    /**
+     * Returns a script that should be injected into the HTML that's launched in the
+     * browser in order to implement remote commands that handle protocol requests. 
+     * Includes the <script> tags.
+     * @return {string}
+     */
+    function getRemoteFunctionsScript() {
+        var script = "";
+        // Inject DocumentObserver into the browser (tracks related documents)
+        script += "window._DocumentObserver=" + DocumentObserver + "();";
+        // Inject remote functions into the browser.
+        script += "window._LD=" + AddedRemoteFunctions + "(" + RemoteFunctions + "())";
+        return "<script>\n" + script + "</script>\n";
     }
     
     /**
@@ -142,8 +216,11 @@ define(function (require, exports, module) {
      */
     function getRemoteScript() {
         var transportScript = _transport.getRemoteScript() || "";
+        var remoteFunctionsScript = getRemoteFunctionsScript() || "";
         return transportScript +
-            "<script>\n" + LiveDevProtocolRemote + "</script>\n";
+            "<script>\n" + LiveDevProtocolRemote + "</script>\n" +
+            remoteFunctionsScript;
+            
     }
     
     /**
@@ -164,15 +241,15 @@ define(function (require, exports, module) {
      *      to the evaluation.
      * TODO: we should probably have a way of returning the results from all clients, not just the first?
      */
-    function evaluate(clients, script) {
+    function evaluate(script, clients) {
         return _send(
-            clients,
             {
                 method: "Runtime.evaluate",
                 params: {
                     expression: script
                 }
-            }
+            },
+            clients
         );
     }
     
@@ -184,15 +261,15 @@ define(function (require, exports, module) {
      *      to the method.
      * TODO: we should probably have a way of returning the results from all clients, not just the first?
      */
-    function reload(clients, ignoreCache) {
+    function reload(ignoreCache, clients) {
         return _send(
-            clients,
             {
                 method: "Page.reload",
                 params: {
                     ignoreCache: true
                 }
-            }
+            },
+            clients
         );
     }
     
@@ -204,10 +281,21 @@ define(function (require, exports, module) {
         _transport.close(clientId);
     }
     
+    function closeAllConnections() {
+        getConnectionIds().forEach(function (clientId) {
+            close(clientId);
+        });
+        _connections = {};
+    }
+    
+    
+    // public API
     exports.setTransport = setTransport;
     exports.getRemoteScript = getRemoteScript;
     exports.launch = launch;
     exports.evaluate = evaluate;
     exports.reload = reload;
     exports.close = close;
+    exports.getConnectionIds = getConnectionIds;
+    exports.closeAllConnections = closeAllConnections;
 });
