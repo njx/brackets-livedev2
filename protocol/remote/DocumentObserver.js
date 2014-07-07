@@ -27,36 +27,198 @@ function DocumentObserver(config) {
     
     var _document = null;
     var _transport;
-    var _imports = {};
+
     
     /**
-     * Send an event in case that a related doc was added/removed 
-     * 
-     * @param {NodeList} nodes DOM nodes that were modified
-     * @param {string} action "Added" or "Removed"
+     * Common functions.
      */
-    function _onNodesChanged(nodes, action) {
+    var Utils = {
+        
+        isExternalStylesheet: function (node) {
+            return (node.nodeName.toUpperCase() === "LINK" && node.rel === "stylesheet" && node.href);
+        },
+        isExternalScript: function (node) {
+            return (node.nodeName.toUpperCase() === "SCRIPT" && node.src);
+        }
+    };
+    
+    /**
+     * CSS related commands and notifications
+     */
+    var CSS = {
+        
+            /**
+            * Maintains a map of stylesheets loaded thorugh @import rules and their parents.
+            * Populated by extractImports, consumed by notifyImportsAdded / notifyImportsRemoved.
+            * @type {
+            */
+            imports : {},
+        
+            /** 
+             * Extract all the stylesheets for this parent by recursively
+             * scanning CSSImportRules and push them to this.imports:
+             *    imports[href] = [imp-href-1, imp-href-2, ...] urls of import-ed stylesheets, being href the url of the parent Stylesheet.
+             * @param {Object:CSSStylesheet} stylesheet
+             */
+            extractImports : function (styleSheet) {
+                var i,
+                    parent,
+                    rules = styleSheet.cssRules;
+                if (!rules) {
+                    return;
+                }
+                for (i = 0; i < rules.length; i++) {
+                    if (rules[i].href) {
+                        parent = rules[i].parentStyleSheet;
+                        // initialize array 
+                        if (!this.imports[parent.href]) {
+                            this.imports[parent.href] = [];
+                        }
+                        // extract absolute url
+                        this.imports[parent.href].push(rules[i].styleSheet.href);
+                        // recursive
+                        this.extractImports(rules[i].styleSheet);
+                    }
+                }
+            },
+
+            /**
+             * Iterates on imports map and send a Stylesheet.Added notification per each 
+             * import-ed stylesheet.
+             * @param  {string} href Absolute URL of the stylesheet.
+             */
+            notifyImportsAdded : function (href) {
+                var self = this;
+                if (!this.imports[href]) {
+                    return;
+                }
+                this.imports[href].forEach(function (impHref) {
+                    _transport.send(JSON.stringify({
+                        method: "Stylesheet.Added",
+                        href: impHref,
+                        parentStylesheet: href
+                    }));
+                    // recursive
+                    self.notifyImportsAdded(impHref);
+                });
+            },
+
+            /**
+             * Sends a notification for the added stylesheet and drives the process 
+             * that extracts @import rules and sends notifications for them.
+             * @param  {string} href Absolute URL of the stylesheet.
+             */
+            notifyStylesheetAdded : function (href) {
+                var self = this;
+                // notify stylesheet added
+                _transport.send(JSON.stringify({
+                    method: "Stylesheet.Added",
+                    href: href
+                }));
+
+                // Inspect CSSRules for @imports:
+                // styleSheet obejct is required to scan CSSImportRules but
+                // browsers differ on the implementation of MutationObserver interface.
+                // Webkit triggers notifications before stylesheets are loaded, 
+                // Firefox does it after loading.
+                // There are also differences on when 'load' event is triggered for 
+                // the 'link' nodes. Webkit triggers it before stylesheet is loaded.
+                // Some references to check:
+                //      http://www.phpied.com/when-is-a-stylesheet-really-loaded/
+                //      http://stackoverflow.com/questions/17747616/webkit-dynamically-created-stylesheet-when-does-it-really-load
+                //        http://stackoverflow.com/questions/11425209/are-dom-mutation-observers-slower-than-dom-mutation-events      
+                //
+                // TODO: This is just a temporary 'cross-browser' solution, it needs optimization.
+                var loadInterval = setInterval(function () {
+                    var i;
+                    for (i = 0; i < document.styleSheets.length; i++) {
+                        if (document.styleSheets[i].href === href) {
+                            //clear interval
+                            clearInterval(loadInterval);
+                            //build imports map, extract imports to _imports[href]
+                            self.extractImports(document.styleSheets[i]);
+                            //notify imports
+                            self.notifyImportsAdded(href);
+                            break;
+                        }
+                    }
+                }, 50);
+            },
+
+            /**
+             * Iterates (recursively) on this.imports map and send a Stylesheet.Removed 
+             * notification per each import-ed stylesheet taking href as the root parent.
+             * @param  {string} href Absolute URL of the stylesheet.
+             */
+            notifyImportsRemoved : function (href) {
+                var self = this;
+                if (!this.imports[href]) {
+                    return;
+                }
+                this.imports[href].forEach(function (impHref) {
+                    _transport.send(JSON.stringify({
+                        method: "Stylesheet.Removed",
+                        href: impHref,
+                        parentStylesheet: href
+                    }));
+                    // recursive
+                    return self.notifyImportsRemoved(impHref);
+                });
+                // remove entry from imports
+                delete this.imports[href];
+            },
+        
+            /**
+             * Sends a notification for the removed stylesheet and  
+             * its import-ed styleshets.
+             * @param  {string} href Absolute URL of the stylesheet.
+             */
+            notifyStylesheetRemoved : function (href) {
+                var i;
+                
+                // notify stylesheet removed
+                _transport.send(JSON.stringify({
+                    method: "Stylesheet.Removed",
+                    href: href
+                }));
+                this.notifyImportsRemoved(href);
+            }
+        };
+
+    
+    /* process related docs added */
+    function _onNodesAdded(nodes) {
         var i;
         for (i = 0; i < nodes.length; i++) {
-            // check for Javascript files
-            if (nodes[i].nodeName === "SCRIPT" && nodes[i].src) {
+            //check for Javascript files
+            if (Utils.isExternalScript(nodes[i])) {
                 _transport.send(JSON.stringify({
-                    method: 'Script.' + action,
+                    method: 'Script.Added',
                     src: nodes[i].src
                 }));
             }
+            //check for stylesheets
+            if (Utils.isExternalStylesheet(nodes[i])) {
+                CSS.notifyStylesheetAdded(nodes[i].href);
+            }
+        }
+    }
+    /* process related docs removed */
+    function _onNodesRemoved(nodes) {
+        var i;
+        //iterate on removed nodes
+        for (i = 0; i < nodes.length; i++) {
             
-            // check for stylesheets
-            if (nodes[i].nodeName === "LINK" && nodes[i].rel === "stylesheet" && nodes[i].href) {
+            // check for external JS files
+            if (Utils.isExternalScript(nodes[i])) {
                 _transport.send(JSON.stringify({
-                    method: 'Stylesheet.' + action,
-                    href: nodes[i].href
+                    method: 'Script.Removed',
+                    src: nodes[i].src
                 }));
-                // TODO: check for @import rules. 
-                // It seems that node we get from MutationRecord doesn't have the entire information:
-                //  - Added stylesheet has import rules (wich give us relative URL) but in Chrome, 
-                //    the stylesheet to be imported is not yet loaded (sheet=null). 
-                //  - Removed stylesheet also has sheet=null since it was proabably already removed.
+            }
+            //check for external StyleSheets
+            if (Utils.isExternalStylesheet(nodes[i])) {
+                CSS.notifyStylesheetRemoved(nodes[i].href);
             }
         }
     }
@@ -68,10 +230,10 @@ function DocumentObserver(config) {
             var observer = new MutationObserver(function (mutations) {
                 mutations.forEach(function (mutation) {
                     if (mutation.addedNodes.length > 0) {
-                        _onNodesChanged(mutation.addedNodes, 'Added');
+                        _onNodesAdded(mutation.addedNodes);
                     }
                     if (mutation.removedNodes.length > 0) {
-                        _onNodesChanged(mutation.removedNodes, 'Removed');
+                        _onNodesRemoved(mutation.removedNodes);
                     }
                 });
             });
@@ -81,11 +243,11 @@ function DocumentObserver(config) {
             });
         } else {
             // use MutationEvents as fallback 
-            _document.addEventListener('DOMNodeInserted', function niLstnr(e) {
-                this._onNodesChanged([e.target], 'Added');
+            document.addEventListener('DOMNodeInserted', function niLstnr(e) {
+                _onNodesAdded([e.target]);
             });
-            _document.addEventListener('DOMNodeRemoved', function nrLstnr(e) {
-                this._onNodesChanged([e.target], 'Removed');
+            document.addEventListener('DOMNodeRemoved', function nrLstnr(e) {
+                _onNodesRemoved([e.target]);
             });
         }
     }
@@ -119,6 +281,17 @@ function DocumentObserver(config) {
                     rel.stylesheets[sheet.href] = [];
                 }
                 rel.stylesheets[sheet.href].push(base);
+                
+                // need to populate 'CSS.imports' to be able to track dependencies for notifications.
+                // TODO: unify scan of import-ed stylesheets.
+                if (!CSS.imports[base]) {
+                    CSS.imports[base] = [];
+                }
+                // filtering parents since traverseRules also extract them.
+                if (sheet.href !== base) {
+                    CSS.imports[base].push(sheet.href);
+                }
+                
                 for (i = 0; i < sheet.cssRules.length; i++) {
                     if (sheet.cssRules[i].href) {
                         traverseRules(sheet.cssRules[i].styleSheet, base);
