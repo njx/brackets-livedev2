@@ -592,7 +592,7 @@ define(function (require, exports, module) {
                     })
                     // create new LiveCSSDocument if a new stylesheet is added
                     .on("Stylesheet.Added.livedev", function (event, msg) {
-                        _styleSheetAdded(null, msg.href, [msg.parentStylesheet]);
+                        _styleSheetAdded(null, msg.href, msg.roots);
                     })
                     // remove LiveCSSDocument instance when stylesheet is removed
                     .on("Stylesheet.Removed.livedev", function (event, msg) {

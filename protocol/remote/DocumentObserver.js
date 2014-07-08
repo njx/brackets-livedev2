@@ -52,69 +52,17 @@ function DocumentObserver(config) {
             * Populated by extractImports, consumed by notifyImportsAdded / notifyImportsRemoved.
             * @type {
             */
-            imports : {},
+            stylesheets : {},
         
-            /** 
-             * Extract all the stylesheets for this parent by recursively
-             * scanning CSSImportRules and push them to this.imports:
-             *    imports[href] = [imp-href-1, imp-href-2, ...] urls of import-ed stylesheets, being href the url of the parent Stylesheet.
-             * @param {Object:CSSStylesheet} stylesheet
-             */
-            extractImports : function (styleSheet) {
-                var i,
-                    parent,
-                    rules = styleSheet.cssRules;
-                if (!rules) {
-                    return;
-                }
-                for (i = 0; i < rules.length; i++) {
-                    if (rules[i].href) {
-                        parent = rules[i].parentStyleSheet;
-                        // initialize array 
-                        if (!this.imports[parent.href]) {
-                            this.imports[parent.href] = [];
-                        }
-                        // extract absolute url
-                        this.imports[parent.href].push(rules[i].styleSheet.href);
-                        // recursive
-                        this.extractImports(rules[i].styleSheet);
-                    }
-                }
-            },
-
             /**
-             * Iterates on imports map and send a Stylesheet.Added notification per each 
-             * import-ed stylesheet.
+             * Check the stylesheet that was just added be really loaded 
+             * to be able to extract potential import-ed stylesheets.
+             * It invokes notifyStylesheetAdded once the sheet is loaded.
              * @param  {string} href Absolute URL of the stylesheet.
              */
-            notifyImportsAdded : function (href) {
+            checkForStylesheetLoaded : function (href) {
                 var self = this;
-                if (!this.imports[href]) {
-                    return;
-                }
-                this.imports[href].forEach(function (impHref) {
-                    _transport.send(JSON.stringify({
-                        method: "Stylesheet.Added",
-                        href: impHref,
-                        parentStylesheet: href
-                    }));
-                    // recursive
-                    self.notifyImportsAdded(impHref);
-                });
-            },
-
-            /**
-             * Sends a notification for the added stylesheet and drives the process 
-             * that extracts @import rules and sends notifications for them.
-             * @param  {string} href Absolute URL of the stylesheet.
-             */
-            notifyStylesheetAdded : function (href) {
-                var self = this;
-                // notify stylesheet added
-                _transport.send(JSON.stringify({
-                    method: "Stylesheet.Added",
-                    href: href
-                }));
+  
 
                 // Inspect CSSRules for @imports:
                 // styleSheet obejct is required to scan CSSImportRules but
@@ -135,53 +83,73 @@ function DocumentObserver(config) {
                         if (document.styleSheets[i].href === href) {
                             //clear interval
                             clearInterval(loadInterval);
-                            //build imports map, extract imports to _imports[href]
-                            self.extractImports(document.styleSheets[i]);
-                            //notify imports
-                            self.notifyImportsAdded(href);
+                            // notify stylesheets added
+                            self.notifyStylesheetAdded(href);
                             break;
                         }
                     }
                 }, 50);
             },
-
             /**
-             * Iterates (recursively) on this.imports map and send a Stylesheet.Removed 
-             * notification per each import-ed stylesheet taking href as the root parent.
-             * @param  {string} href Absolute URL of the stylesheet.
+             * Send a notification for the stylesheet added and  
+             * its import-ed styleshets based on document.stylesheets diff
+             * from previous status. It also updates stylesheets status. 
              */
-            notifyImportsRemoved : function (href) {
-                var self = this;
-                if (!this.imports[href]) {
-                    return;
-                }
-                this.imports[href].forEach(function (impHref) {
-                    _transport.send(JSON.stringify({
-                        method: "Stylesheet.Removed",
-                        href: impHref,
-                        parentStylesheet: href
-                    }));
-                    // recursive
-                    return self.notifyImportsRemoved(impHref);
+            notifyStylesheetAdded : function () {
+                var i,
+                    added = {},
+                    current,
+                    newStatus;
+                
+                current = this.stylesheets;
+                newStatus = related().stylesheets;
+                
+                Object.keys(newStatus).forEach(function (v, i) {
+                    if (!current[v]) {
+                        added[v] = newStatus[v];
+                    }
                 });
-                // remove entry from imports
-                delete this.imports[href];
+                              
+                Object.keys(added).forEach(function (v, i) {
+                    _transport.send(JSON.stringify({
+                        method: "Stylesheet.Added",
+                        href: v,
+                        roots: added[v]
+                    }));
+                });
+                
+                this.stylesheets = newStatus;
             },
         
             /**
-             * Sends a notification for the removed stylesheet and  
-             * its import-ed styleshets.
-             * @param  {string} href Absolute URL of the stylesheet.
+             * Send a notification for the removed stylesheet and  
+             * its import-ed styleshets based on document.stylesheets diff
+             * from previous status. It also updates stylesheets status.
              */
-            notifyStylesheetRemoved : function (href) {
-                var i;
+            notifyStylesheetRemoved : function () {
+                var i,
+                    removed = {},
+                    newStatus,
+                    current;
                 
-                // notify stylesheet removed
-                _transport.send(JSON.stringify({
-                    method: "Stylesheet.Removed",
-                    href: href
-                }));
-                this.notifyImportsRemoved(href);
+                current = this.stylesheets;
+                newStatus = related().stylesheets;
+                
+                Object.keys(current).forEach(function (v, i) {
+                    if (!newStatus[v]) {
+                        removed[v] = current[v];
+                    }
+                });
+                
+                Object.keys(removed).forEach(function (v, i) {
+                    _transport.send(JSON.stringify({
+                        method: "Stylesheet.Removed",
+                        href: v,
+                        roots: removed[v]
+                    }));
+                });
+                
+                this.stylesheets = newStatus;
             }
         };
 
@@ -199,7 +167,7 @@ function DocumentObserver(config) {
             }
             //check for stylesheets
             if (Utils.isExternalStylesheet(nodes[i])) {
-                CSS.notifyStylesheetAdded(nodes[i].href);
+                CSS.checkForStylesheetLoaded(nodes[i].href);
             }
         }
     }
@@ -282,15 +250,6 @@ function DocumentObserver(config) {
                 }
                 rel.stylesheets[sheet.href].push(base);
                 
-                // need to populate 'CSS.imports' to be able to track dependencies for notifications.
-                // TODO: unify scan of import-ed stylesheets.
-                if (!CSS.imports[base]) {
-                    CSS.imports[base] = [];
-                }
-                // filtering parents since traverseRules also extract them.
-                if (sheet.href !== base) {
-                    CSS.imports[base].push(sheet.href);
-                }
                 
                 for (i = 0; i < sheet.cssRules.length; i++) {
                     if (sheet.cssRules[i].href) {
@@ -318,11 +277,16 @@ function DocumentObserver(config) {
         _document = document;
         // start listening to node changes
         _enableListeners();
+        
+        var rel = related();
+        
         // send the current status of related docs. 
         _transport.send(JSON.stringify({
             method: "Document.Related",
-            related: related()
+            related: rel
         }));
+        // initialize stylesheets with current status for further notifications.
+        CSS.stylesheets = rel.stylesheets;
     }
     
     /**
