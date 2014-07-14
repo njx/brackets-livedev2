@@ -21,7 +21,7 @@
  * 
  */
 
-/*jslint browser: true, vars: true, plusplus: true, devel: true, nomen: true, indent: 4, forin: true, maxerr: 50, regexp: true, evil: true */
+/*jslint evil: true */
 
 // This is the script that Brackets live development injects into HTML pages in order to
 // establish and maintain the live development socket connection. Note that Brackets may
@@ -39,38 +39,137 @@
     
 
     /**
-     * The remote handler for the protocol.
+     * Manage messaging between Editor and Browser at the protocol layer.
+     * Handle messages that arrives through the current transport and dispatch them 
+     * to subscribers. Subscribers are handlers that implements remote commands/functions.
+     * Property 'method' of messages body is used as the 'key' to identify message types.   
+     * Provide a 'send' operation that allows remote commands sending messages to the Editor.
      */
-    var ProtocolHandler = {
+    var MessageBroker = {
+                
         /**
-         * Handles a message from the transport. Parses it as JSON and looks at the
-         * "method" field to determine what the action is.
-         * @param {msgStr} string The protocol message as stringified JSON.
+         * Collection of handlers (subscribers) per each method.
+         * To be pushed by 'on' and consumed by 'trigger' stored this way: 
+         *      handlers[method] = [handler1, handler2, ...]
          */
-        message: function (msgStr) {
-            console.log("received: " + msgStr);
-            var msg = JSON.parse(msgStr);
+        handlers: {},
+        
+         /**
+          * Dispatch messages to handlers according to msg.method value.
+          * @param {Object} msg Message to be dispatched.
+          */
+        trigger: function (msg) {
+            var msgHandlers;
+            if (!msg.method) {
+                // no message type, ignoring it
+                // TODO: should we trigger a generic event?
+                console.log("[Brackets LiveDev] Received message without method.");
+                return;
+            }
+            // get handlers for msg.method
+            msgHandlers = this.handlers[msg.method];
             
-            // TODO: more easily extensible way of adding protocol handler methods
-            if (msg.method === "Runtime.evaluate") {
-                console.log("evaluating: " + msg.params.expression);
-                var result = eval(msg.params.expression);
-                console.log("result: " + result);
-                this.respond(msg, {
-                    result: JSON.stringify(result) // TODO: in original protocol this is an object handle
+            if (msgHandlers && msgHandlers.length > 0) {
+                // invoke handlers with the received message
+                msgHandlers.forEach(function (handler) {
+                    try {
+                        // TODO: check which context should be used to call handlers here.
+                        handler(msg);
+                        return;
+                    } catch (e) {
+                        console.error("[Brackets LiveDev] Error executing a handler for " + msg.method);
+                        return;
+                    }
                 });
+            } else {
+                // no subscribers, ignore it.
+                // TODO: any other default handling? (eg. specific respond, trigger as a generic event, etc.);
+                console.log("[Brackets LiveDev] No subscribers for message " + msg.method);
+                return;
             }
         },
         
         /**
-         * Responds to a message, setting the response message's ID to the same ID as the
-         * original request.
-         * @param {Object} orig The original message object.
-         * @param {Object} response The response message object.
+         * Send a response of a particular message to the Editor.
+         * Original message must provide an 'id' property
+         * @param {Object} orig Original message.
+         * @param {Object} response Message to be sent as the response.
          */
         respond: function (orig, response) {
+            if (!orig.id) {
+                console.log("[Brackets LiveDev] Trying to send a response for a message with no ID");
+                return;
+            }
             response.id = orig.id;
-            transport.send(JSON.stringify(response));
+            this.send(JSON.stringify(response));
+        },
+        
+        /**
+         * Subscribe handlers to specific messages.
+         * @param {string} method Message type.
+         * @param {function} handler.
+         * TODO: add handler name or any identification mechanism to then implement 'off'?
+         */
+        on: function (method, handler) {
+            if (!method || !handler) {
+                return;
+            }
+            if (!this.handlers[method]) {
+                //initialize array
+                this.handlers[method] = [];
+            }
+            // add handler to the stack
+            this.handlers[method].push(handler);
+        },
+        
+        /**
+         * Send a message to the Editor.
+         * @param {string} msgStr Message to be sent.
+         */
+        send: function (msgStr) {
+            transport.send(JSON.stringify(msgStr));
+        }
+    };
+    
+    /**
+     * Runtime Domain. Implements remote commands for "Runtime.*"
+     */
+    var Runtime = {
+        /**
+         * Evaluate an expresion and return its result.
+         */
+        evaluate: function (msg) {
+            console.log("Runtime.evaluate");
+            var result = eval(msg.params.expression);
+            MessageBroker.respond(msg, {
+                result: JSON.stringify(result) // TODO: in original protocol this is an object handle
+            });
+        }
+    };
+    
+    // subscribe handler to method Runtime.evaluate
+    MessageBroker.on("Runtime.evaluate", Runtime.evaluate);
+        
+    /**
+     * The remote handler for the protocol.
+     */
+    var ProtocolHandler = {
+        /**
+         * Handles a message from the transport. Parses it as JSON and delegates
+         * to MessageBroker who is in charge of routing them to handlers.
+         * @param {string} msgStr The protocol message as stringified JSON.
+         */
+        message: function (msgStr) {
+            var msg;
+            try {
+                msg = JSON.parse(msgStr);
+            } catch (e) {
+                console.log("[Brackets LiveDev] Invalid Message Received");
+                // TODO: we should probably send back an error message here?
+                return;
+            }
+            // delegates handling/routing to MessageBroker.
+            MessageBroker.trigger(msg);
         }
     };
     
