@@ -37,6 +37,7 @@
     //     send(msgStr) - sends the given message string over the transport.
     var transport = global._Brackets_LiveDev_Transport;
     
+
     /**
      * The remote handler for the protocol.
      */
@@ -80,5 +81,5 @@
     }
     
     transport.setCallbacks(ProtocolHandler);
-
+    
 }(this));
