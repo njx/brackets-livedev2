@@ -62,7 +62,7 @@ define(function LiveCSSDocumentModule(require, exports, module) {
      *     If not specified initially, the LiveDocument will connect to the editor for the given document
      *     when it next becomes the active editor.
      */
-    var LiveCSSDocument = function LiveCSSDocument(protocol, urlResolver, doc, editor, connections, roots) {
+    var LiveCSSDocument = function LiveCSSDocument(protocol, urlResolver, doc, editor, roots) {
         LiveDocument.apply(this, arguments);
         
         // Add a ref to the doc since we're listening for change events
@@ -127,7 +127,7 @@ define(function LiveCSSDocumentModule(require, exports, module) {
                 // reload the original doc
                 $(this).triggerHandler("updateDoc", this.roots[i]);
             } else {
-                this.protocol.evaluate(this.getConnectionIds(), "_LD.reloadCSS(" +
+                this.protocol.evaluate("_LD.reloadCSS(" +
                                        JSON.stringify(this.doc.url) + ", " +
                                        JSON.stringify(this.doc.getText()) + ")");
             }

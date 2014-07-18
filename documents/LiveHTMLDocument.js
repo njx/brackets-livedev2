@@ -40,8 +40,7 @@ define(function (require, exports, module) {
         StringUtils         = brackets.getModule("utils/StringUtils"),
         _                   = brackets.getModule("thirdparty/lodash"),
         LiveDocument        = require("documents/LiveDocument"),
-        HTMLInstrumentation = require("language/HTMLInstrumentation"),
-        AddedRemoteFunctions = require("text!protocol/remote/ExtendedRemoteFunctions.js");
+        HTMLInstrumentation = require("language/HTMLInstrumentation");
 
 
     /**
@@ -67,47 +66,27 @@ define(function (require, exports, module) {
         this._onChange = this._onChange.bind(this);
         $(this.doc).on("change", this._onChange);
         
-        this._onMessage = this._onMessage.bind(this);
-        $(this.protocol).on("event", this._onMessage);
+        this._onRelated = this._onRelated.bind(this);
+        $(this.protocol).on("Document.Related", this._onRelated);
+        
+        this._onStylesheetAdded = this._onStylesheetAdded.bind(this);
+        $(this.protocol).on("Stylesheet.Added", this._onStylesheetAdded);
+        
+        this._onStylesheetRemoved = this._onStylesheetRemoved.bind(this);
+        $(this.protocol).on("Stylesheet.Removed", this._onStylesheetRemoved);
+        
+        this._onScriptAdded = this._onScriptAdded.bind(this);
+        $(this.protocol).on("Script.Added", this._onScriptAdded);
+        
+        this._onScriptRemoved = this._onScriptRemoved.bind(this);
+        $(this.protocol).on("Script.Removed", this._onScriptRemoved);
+        
     }
     
     LiveHTMLDocument.prototype = Object.create(LiveDocument.prototype);
     LiveHTMLDocument.prototype.constructor = LiveHTMLDocument;
     LiveHTMLDocument.prototype.parentClass = LiveDocument.prototype;
     
-    /**
-     * @private
-     * Handles a connection from a browser page. Injects the RemoteFunctions script via the
-     * live development protocol in order to provide highlighting and live DOM editing functionality.
-     * @param {$.Event} event
-     * @param {number} clientId
-     * @param {string} url
-     */
-    LiveHTMLDocument.prototype._onConnect = function (event, clientId, url) {
-        var self = this;
-        
-        this.parentClass._onConnect.apply(this, arguments);
-        
-        if (url === this.urlResolver(this.doc.file.fullPath)) {
-        
-            // Inject DocumentObserver into the browser (tracks related documents)
-            // TODO: register as part of the protocol once we have an extension mechanism
-            var DocumentObserver = require("text!protocol/remote/DocumentObserver.js");
-            self.protocol.evaluate([clientId], "window._DocumentObserver=" + DocumentObserver + "();");
-        
-            // TODO: possible race condition if someone tries to access RemoteFunctions before this
-            // injection is completed
-            brackets.getModule(["text!LiveDevelopment/Agents/RemoteFunctions.js"], function (RemoteFunctions) {
-                // Inject our remote functions into the browser.
-                var command = "window._LD=" + AddedRemoteFunctions + "(" + RemoteFunctions + "())";
-                // TODO: handle error, wasThrown?
-                self.protocol.evaluate([clientId], command);
-            });
-        }
-        
-        // TODO: race condition if the version of the instrumented HTML that the browser loaded is out of sync with
-        // our current state. Should include a serial number in the instrumented HTML representing the last live edit.
-    };
     
     /**
      * @override
@@ -266,7 +245,7 @@ define(function (require, exports, module) {
             applyEditsPromise;
         
         if (result.edits) {
-            applyEditsPromise = this.protocol.evaluate(this.getConnectionIds(), "_LD.applyDOMEdits(" + JSON.stringify(result.edits) + ")");
+            applyEditsPromise = this.protocol.evaluate("_LD.applyDOMEdits(" + JSON.stringify(result.edits) + ")");
     
             applyEditsPromise.always(function () {
                 if (!isNestedTimer) {
@@ -293,31 +272,57 @@ define(function (require, exports, module) {
     
     /**
      * @private
-     * Handles message received from the browser.
+     * Handles message Document.Related from the browser.
      * @param {$.Event} event
-     * @param {number} clientId
      * @param {Object} msg
-     * TODO: we should have a better extensible way to register handlers for different message types (subscribe?).
      */
-    LiveHTMLDocument.prototype._onMessage = function (event, clientId, msg) {
-        
-        switch (msg.type) {
-        case "Document.Related":
-            this._relatedDocuments = msg.related;
-            break;
-        case "Stylesheet.Added":
-            this._relatedDocuments.stylesheets[msg.href] = true;
-            break;
-        case "Stylesheet.Removed":
-            delete (this._relatedDocuments.stylesheets[msg.href]);
-            break;
-        case "Script.Added":
-            this._relatedDocuments.scripts[msg.src] = true;
-            break;
-        case "Script.Removed":
-            delete (this._relatedDocuments.scripts[msg.src]);
-            break;
-        }
+    LiveHTMLDocument.prototype._onRelated = function (event, msg) {
+        this._relatedDocuments = msg.related;
+        return;
+    };
+    
+    /**
+     * @private
+     * Handles message Stylesheet.Added from the browser.
+     * @param {$.Event} event
+     * @param {Object} msg
+     */
+    LiveHTMLDocument.prototype._onStylesheetAdded = function (event, msg) {
+        this._relatedDocuments.stylesheets[msg.href] = true;
+        return;
+    };
+    
+    /**
+     * @private
+     * Handles message Stylesheet.Removed from the browser.
+     * @param {$.Event} event
+     * @param {Object} msg
+     */
+    LiveHTMLDocument.prototype._onStylesheetRemoved = function (event, msg) {
+        delete (this._relatedDocuments.stylesheets[msg.href]);
+        return;
+    };
+    
+    /**
+     * @private
+     * Handles message Script.Added from the browser.
+     * @param {$.Event} event
+     * @param {Object} msg
+     */
+    LiveHTMLDocument.prototype._onScriptAdded = function (event, msg) {
+        this._relatedDocuments.scripts[msg.src] = true;
+        return;
+    };
+
+     /**
+     * @private
+     * Handles message Script.Removed from the browser.
+     * @param {$.Event} event
+     * @param {Object} msg
+     */
+    LiveHTMLDocument.prototype._onScriptRemoved = function (event, msg) {
+        delete (this._relatedDocuments.scripts[msg.src]);
+        return;
     };
     
      /**

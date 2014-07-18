@@ -59,19 +59,11 @@ define(function (require, exports, module) {
      *     If not specified initially, the LiveDocument will connect to the editor for the given document
      *     when it next becomes the active editor.
      */
-    function LiveDocument(protocol, urlResolver, doc, editor, connections, roots) {
+    function LiveDocument(protocol, urlResolver, doc, editor, roots) {
         this.protocol = protocol;
         this.urlResolver = urlResolver;
         this.doc = doc;
-        this.connections = connections || {};
         this.roots = roots || [];
-        
-        this._onConnect = this._onConnect.bind(this);
-        this._onClose = this._onClose.bind(this);
-        
-        $(this.protocol)
-            .on("connect", this._onConnect)
-            .on("close", this._onClose);
         
         this._onActiveEditorChange = this._onActiveEditorChange.bind(this);
         this._onCursorActivity = this._onCursorActivity.bind(this);
@@ -97,18 +89,22 @@ define(function (require, exports, module) {
      */
     LiveDocument.prototype.close = function () {
         var self = this;
-        this.getConnectionIds().forEach(function (clientId) {
-            self.protocol.close(clientId);
-        });
-        this.connections = {};
-        $(this.protocol)
-            .off("connect", this._onConnect)
-            .off("close", this._onClose);
-        this._clearErrorDisplay();
-        this._detachFromEditor();
-        $(EditorManager).off("activeEditorChange", this._onActiveEditorChange);
-        PreferencesManager.stateManager.getPreference("livedev2.highlight")
-            .off("change", this._onHighlightPrefChange);
+        //FIXME: #7 prevents the page to be reloaded when editing JS files.
+        //       Temporarily disabling this code to make JS editing work.
+        
+//        this.getConnectionIds().forEach(function (clientId) {
+//            self.protocol.close(clientId);
+//        });
+//        this.connections = {};
+//        $(this.protocol)
+//            .off("connect", this._onConnect)
+//            .off("close", this._onClose);
+//        this._clearErrorDisplay();
+//        this._detachFromEditor();
+//        $(EditorManager).off("activeEditorChange", this._onActiveEditorChange);
+//        PreferencesManager.stateManager.getPreference("livedev2.highlight")
+//            .off("change", this._onHighlightPrefChange);
+        
     };
     
     /**
@@ -143,14 +139,6 @@ define(function (require, exports, module) {
             body: this.doc.getText()
         };
     };
-
-    /**
-     * Returns an array of the client IDs that are being managed by this live document.
-     * @return {Array.<number>}
-     */
-    LiveDocument.prototype.getConnectionIds = function () {
-        return Object.keys(this.connections);
-    };
     
     /**
      * @private
@@ -172,38 +160,14 @@ define(function (require, exports, module) {
      * @param {?Editor} oldActive
      */
     LiveDocument.prototype._onActiveEditorChange = function (event, newActive, oldActive) {
-        this._detachFromEditor();
+ 
+        //FIXME: #7 prevents the page to be reloaded when editing JS files.
+        //       Temporarily disabling this code to make JS editing work.
+//      this._detachFromEditor();
         
         if (newActive && newActive.document === this.doc) {
             this._attachToEditor(newActive);
         }
-    };
-
-    /**
-     * @private
-     * Handles when a connection is made to the live development protocol handler.
-     * Records the connection's client ID and triggers the "connect" event.
-     * @param {$.Event} event
-     * @param {number} clientId
-     * @param {string} url
-     */
-    LiveDocument.prototype._onConnect = function (event, clientId, url) {
-        if (url === this.urlResolver(this.doc.file.fullPath)) {
-            this.connections[clientId] = true;
-            $(this).triggerHandler("connect", [url]);
-        }
-    };
-    
-    /**
-     * @private
-     * Handles when a connection is closed.
-     * @param {$.Event} event
-     * @param {number} clientId
-     */
-    LiveDocument.prototype._onClose = function (event, clientId) {
-        // TODO: notify Live Development if this is the last connection so we can show disconnected? Or
-        // should we just leave the connection open in case another browser wants to connect?
-        delete this.connections[clientId];
     };
     
     /**
@@ -337,7 +301,7 @@ define(function (require, exports, module) {
         if (!temporary) {
             this._lastHighlight = null;
         }
-        this.protocol.evaluate(this.getConnectionIds(), "_LD.hideHighlight()");
+        this.protocol.evaluate("_LD.hideHighlight()");
     };
 
     /**
@@ -350,7 +314,7 @@ define(function (require, exports, module) {
             return;
         }
         this._lastHighlight = name;
-        this.protocol.evaluate(this.getConnectionIds(), "_LD.highlightRule(" + JSON.stringify(name) + ")");
+        this.protocol.evaluate("_LD.highlightRule(" + JSON.stringify(name) + ")");
     };
     
     /** 
@@ -380,7 +344,7 @@ define(function (require, exports, module) {
      */
     LiveDocument.prototype.redrawHighlights = function () {
         if (this.isHighlightEnabled()) {
-            this.protocol.evaluate(this.getConnectionIds(), "_LD.redrawHighlights()");
+            this.protocol.evaluate("_LD.redrawHighlights()");
         }
     };
     
