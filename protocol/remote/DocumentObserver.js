@@ -27,36 +27,166 @@ function DocumentObserver(config) {
     
     var _document = null;
     var _transport;
-    var _imports = {};
+
     
     /**
-     * Send an event in case that a related doc was added/removed 
-     * 
-     * @param {NodeList} nodes DOM nodes that were modified
-     * @param {string} action "Added" or "Removed"
+     * Common functions.
      */
-    function _onNodesChanged(nodes, action) {
+    var Utils = {
+        
+        isExternalStylesheet: function (node) {
+            return (node.nodeName.toUpperCase() === "LINK" && node.rel === "stylesheet" && node.href);
+        },
+        isExternalScript: function (node) {
+            return (node.nodeName.toUpperCase() === "SCRIPT" && node.src);
+        }
+    };
+    
+    /**
+     * CSS related commands and notifications
+     */
+    var CSS = {
+        
+            /**
+            * Maintains a map of stylesheets loaded thorugh @import rules and their parents.
+            * Populated by extractImports, consumed by notifyImportsAdded / notifyImportsRemoved.
+            * @type {
+            */
+            stylesheets : {},
+        
+            /**
+             * Check the stylesheet that was just added be really loaded 
+             * to be able to extract potential import-ed stylesheets.
+             * It invokes notifyStylesheetAdded once the sheet is loaded.
+             * @param  {string} href Absolute URL of the stylesheet.
+             */
+            checkForStylesheetLoaded : function (href) {
+                var self = this;
+  
+
+                // Inspect CSSRules for @imports:
+                // styleSheet obejct is required to scan CSSImportRules but
+                // browsers differ on the implementation of MutationObserver interface.
+                // Webkit triggers notifications before stylesheets are loaded, 
+                // Firefox does it after loading.
+                // There are also differences on when 'load' event is triggered for 
+                // the 'link' nodes. Webkit triggers it before stylesheet is loaded.
+                // Some references to check:
+                //      http://www.phpied.com/when-is-a-stylesheet-really-loaded/
+                //      http://stackoverflow.com/questions/17747616/webkit-dynamically-created-stylesheet-when-does-it-really-load
+                //        http://stackoverflow.com/questions/11425209/are-dom-mutation-observers-slower-than-dom-mutation-events      
+                //
+                // TODO: This is just a temporary 'cross-browser' solution, it needs optimization.
+                var loadInterval = setInterval(function () {
+                    var i;
+                    for (i = 0; i < document.styleSheets.length; i++) {
+                        if (document.styleSheets[i].href === href) {
+                            //clear interval
+                            clearInterval(loadInterval);
+                            // notify stylesheets added
+                            self.notifyStylesheetAdded(href);
+                            break;
+                        }
+                    }
+                }, 50);
+            },
+            /**
+             * Send a notification for the stylesheet added and  
+             * its import-ed styleshets based on document.stylesheets diff
+             * from previous status. It also updates stylesheets status. 
+             */
+            notifyStylesheetAdded : function () {
+                var i,
+                    added = {},
+                    current,
+                    newStatus;
+                
+                current = this.stylesheets;
+                newStatus = related().stylesheets;
+                
+                Object.keys(newStatus).forEach(function (v, i) {
+                    if (!current[v]) {
+                        added[v] = newStatus[v];
+                    }
+                });
+                              
+                Object.keys(added).forEach(function (v, i) {
+                    _transport.send(JSON.stringify({
+                        method: "Stylesheet.Added",
+                        href: v,
+                        roots: added[v]
+                    }));
+                });
+                
+                this.stylesheets = newStatus;
+            },
+        
+            /**
+             * Send a notification for the removed stylesheet and  
+             * its import-ed styleshets based on document.stylesheets diff
+             * from previous status. It also updates stylesheets status.
+             */
+            notifyStylesheetRemoved : function () {
+                var i,
+                    removed = {},
+                    newStatus,
+                    current;
+                
+                current = this.stylesheets;
+                newStatus = related().stylesheets;
+                
+                Object.keys(current).forEach(function (v, i) {
+                    if (!newStatus[v]) {
+                        removed[v] = current[v];
+                    }
+                });
+                
+                Object.keys(removed).forEach(function (v, i) {
+                    _transport.send(JSON.stringify({
+                        method: "Stylesheet.Removed",
+                        href: v,
+                        roots: removed[v]
+                    }));
+                });
+                
+                this.stylesheets = newStatus;
+            }
+        };
+
+    
+    /* process related docs added */
+    function _onNodesAdded(nodes) {
         var i;
         for (i = 0; i < nodes.length; i++) {
-            // check for Javascript files
-            if (nodes[i].nodeName === "SCRIPT" && nodes[i].src) {
+            //check for Javascript files
+            if (Utils.isExternalScript(nodes[i])) {
                 _transport.send(JSON.stringify({
-                    method: 'Script.' + action,
+                    method: 'Script.Added',
                     src: nodes[i].src
                 }));
             }
+            //check for stylesheets
+            if (Utils.isExternalStylesheet(nodes[i])) {
+                CSS.checkForStylesheetLoaded(nodes[i].href);
+            }
+        }
+    }
+    /* process related docs removed */
+    function _onNodesRemoved(nodes) {
+        var i;
+        //iterate on removed nodes
+        for (i = 0; i < nodes.length; i++) {
             
-            // check for stylesheets
-            if (nodes[i].nodeName === "LINK" && nodes[i].rel === "stylesheet" && nodes[i].href) {
+            // check for external JS files
+            if (Utils.isExternalScript(nodes[i])) {
                 _transport.send(JSON.stringify({
-                    method: 'Stylesheet.' + action,
-                    href: nodes[i].href
+                    method: 'Script.Removed',
+                    src: nodes[i].src
                 }));
-                // TODO: check for @import rules. 
-                // It seems that node we get from MutationRecord doesn't have the entire information:
-                //  - Added stylesheet has import rules (wich give us relative URL) but in Chrome, 
-                //    the stylesheet to be imported is not yet loaded (sheet=null). 
-                //  - Removed stylesheet also has sheet=null since it was proabably already removed.
+            }
+            //check for external StyleSheets
+            if (Utils.isExternalStylesheet(nodes[i])) {
+                CSS.notifyStylesheetRemoved(nodes[i].href);
             }
         }
     }
@@ -68,10 +198,10 @@ function DocumentObserver(config) {
             var observer = new MutationObserver(function (mutations) {
                 mutations.forEach(function (mutation) {
                     if (mutation.addedNodes.length > 0) {
-                        _onNodesChanged(mutation.addedNodes, 'Added');
+                        _onNodesAdded(mutation.addedNodes);
                     }
                     if (mutation.removedNodes.length > 0) {
-                        _onNodesChanged(mutation.removedNodes, 'Removed');
+                        _onNodesRemoved(mutation.removedNodes);
                     }
                 });
             });
@@ -81,11 +211,11 @@ function DocumentObserver(config) {
             });
         } else {
             // use MutationEvents as fallback 
-            _document.addEventListener('DOMNodeInserted', function niLstnr(e) {
-                this._onNodesChanged([e.target], 'Added');
+            document.addEventListener('DOMNodeInserted', function niLstnr(e) {
+                _onNodesAdded([e.target]);
             });
-            _document.addEventListener('DOMNodeRemoved', function nrLstnr(e) {
-                this._onNodesChanged([e.target], 'Removed');
+            document.addEventListener('DOMNodeRemoved', function nrLstnr(e) {
+                _onNodesRemoved([e.target]);
             });
         }
     }
@@ -119,6 +249,8 @@ function DocumentObserver(config) {
                     rel.stylesheets[sheet.href] = [];
                 }
                 rel.stylesheets[sheet.href].push(base);
+                
+                
                 for (i = 0; i < sheet.cssRules.length; i++) {
                     if (sheet.cssRules[i].href) {
                         traverseRules(sheet.cssRules[i].styleSheet, base);
@@ -145,11 +277,16 @@ function DocumentObserver(config) {
         _document = document;
         // start listening to node changes
         _enableListeners();
+        
+        var rel = related();
+        
         // send the current status of related docs. 
         _transport.send(JSON.stringify({
             method: "Document.Related",
-            related: related()
+            related: rel
         }));
+        // initialize stylesheets with current status for further notifications.
+        CSS.stylesheets = rel.stylesheets;
     }
     
     /**
