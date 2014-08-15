@@ -71,6 +71,7 @@ define(function (require, exports, module) {
     var STATUS_ACTIVE         = exports.STATUS_ACTIVE         =  3;
     var STATUS_OUT_OF_SYNC    = exports.STATUS_OUT_OF_SYNC    =  4;
     var STATUS_SYNC_ERROR     = exports.STATUS_SYNC_ERROR     =  5;
+    var STATUS_RELOADING      = exports.STATUS_RELOADING      =  6;
 
     var Async                = brackets.getModule("utils/Async"),
         Dialogs              = brackets.getModule("widgets/Dialogs"),
@@ -351,8 +352,6 @@ define(function (require, exports, module) {
                 if (liveDoc) {
                     _server.add(liveDoc);
                     _relatedDocuments[doc.url] = liveDoc;
-                    _setStatus(STATUS_ACTIVE); // since opening one of the related docs
-                    
                     $(liveDoc).on("updateDoc", function (event, url) {
                         var path = _server.urlToPath(url),
                             doc = getLiveDocForPath(path);
@@ -570,15 +569,27 @@ define(function (require, exports, module) {
             if (_server) {
                 // Launch the URL in the browser. If it's the first one to connect back to us,
                 // our status will transition to ACTIVE once it does so.
-                _protocol.launch(_server.pathToUrl(doc.file.fullPath));
+                if (exports.status < STATUS_ACTIVE) {
+                    _protocol.launch(_server.pathToUrl(doc.file.fullPath));
+                }
 
                 $(_protocol)
                     // TODO: timeout if we don't get a connection within a certain time
                     .on("Connection.connect.livedev", function (event, msg) {
+                        // check for the first connection
                         if (_protocol.getConnectionIds().length === 1) {
                             var doc = _getCurrentDocument();
-                            if (doc && msg.url === _resolveUrl(doc.file.fullPath)) {
+                            // check the page that connection comes from matches the current live document session
+                            if (_liveDocument && (msg.url === _resolveUrl(_liveDocument.doc.file.fullPath))) {
                                 _setStatus(STATUS_ACTIVE);
+                            }
+                        }
+                    })
+                    .on("Connection.close.livedev", function (event, msg) {
+                        // close session when the last connection was closed
+                        if (_protocol.getConnectionIds().length === 0) {
+                            if (exports.status !== STATUS_RELOADING) {
+                                close("detached_target_closed");
                             }
                         }
                     })
@@ -706,12 +717,6 @@ define(function (require, exports, module) {
 
             open();
         }
-        $(_liveDocument).one("connect", function (event, url) {
-            var doc = _getCurrentDocument();
-            if (doc && url === _resolveUrl(doc.file.fullPath)) {
-                _setStatus(STATUS_ACTIVE);
-            }
-        });
     }
 
     /**
@@ -769,6 +774,7 @@ define(function (require, exports, module) {
         // to the current live document.
         if (_liveDocument.isRelated(absolutePath)) {
             if (doc.getLanguage().getId() === "javascript") {
+                _setStatus(STATUS_RELOADING);
                 _protocol.reload();
             }
         }

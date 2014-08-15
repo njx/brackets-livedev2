@@ -77,7 +77,8 @@
                         handler(msg);
                         return;
                     } catch (e) {
-                        console.error("[Brackets LiveDev] Error executing a handler for " + msg.method);
+                        console.log("[Brackets LiveDev] Error executing a handler for " + msg.method);
+                        console.log(e.stack);
                         return;
                     }
                 });
@@ -161,11 +162,23 @@
         reload: function (msg) {
             // just reload the page
             window.location.reload(msg.params.ignoreCache);
+        },
+        
+        /**
+         * Navigate to a different page.
+         * @param {Object} msg
+         */
+        navigate: function (msg) {
+            if (msg.params.url) {
+                // navigate to a new page.
+                window.location.replace(msg.params.url);
+            }
         }
     };
          
     // subscribe handler to method Page.reload
     MessageBroker.on("Page.reload", Page.reload);
+    MessageBroker.on("Connection.close", Page.close);
         
     /**
      * The remote handler for the protocol.
@@ -187,6 +200,29 @@
             }
             // delegates handling/routing to MessageBroker.
             MessageBroker.trigger(msg);
+        },
+        
+        close: function (evt) {
+                    
+            // TODO: This is absolutely temporary solution. It shows a message 
+            // when the connection has been closed. UX decision to be taken on what to do when 
+            // the session is explicitly closed from the Editor side. If the browser can't be closed,
+            // this could be an alternative. A better alternative to this could be a redirection
+            // to a custom static page being served by StaticServer 
+            var body = document.getElementsByTagName("body")[0];
+            body.style.opacity = 0.5;
+            var status = document.createElement("div");
+            status.textContent = "Live Development Session has Ended";
+            status.style.width = "100%";
+            status.style.color = "#fff";
+            status.style.backgroundColor = "#ff0000";
+            status.style.position = "absolute";
+            status.style.top = 0;
+            status.style.left = 0;
+            status.style.padding = "0.2em";
+            status.style.zIndex = 2227;
+            body.appendChild(status);
+
         }
     };
     
