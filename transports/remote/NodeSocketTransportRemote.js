@@ -104,7 +104,7 @@
             };
             this._ws.onclose = function (event) {
                 self._ws = null;
-                if (self._callbacks && self.callbacks.close) {
+                if (self._callbacks && self._callbacks.close) {
                     self._callbacks.close();
                 }
             };
