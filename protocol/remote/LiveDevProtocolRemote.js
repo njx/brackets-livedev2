@@ -178,6 +178,7 @@
          
     // subscribe handler to method Page.reload
     MessageBroker.on("Page.reload", Page.reload);
+    MessageBroker.on("Page.navigate", Page.navigate);
     MessageBroker.on("Connection.close", Page.close);
         
     /**

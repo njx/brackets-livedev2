@@ -67,11 +67,11 @@ define(function (require, exports, module) {
     var STATUS_ERROR          = exports.STATUS_ERROR          = -1;
     var STATUS_INACTIVE       = exports.STATUS_INACTIVE       =  0;
     var STATUS_CONNECTING     = exports.STATUS_CONNECTING     =  1;
-    var STATUS_LOADING_AGENTS = exports.STATUS_LOADING_AGENTS =  2;
-    var STATUS_ACTIVE         = exports.STATUS_ACTIVE         =  3;
-    var STATUS_OUT_OF_SYNC    = exports.STATUS_OUT_OF_SYNC    =  4;
-    var STATUS_SYNC_ERROR     = exports.STATUS_SYNC_ERROR     =  5;
-    var STATUS_RELOADING      = exports.STATUS_RELOADING      =  6;
+    var STATUS_ACTIVE         = exports.STATUS_ACTIVE         =  2;
+    var STATUS_OUT_OF_SYNC    = exports.STATUS_OUT_OF_SYNC    =  3;
+    var STATUS_SYNC_ERROR     = exports.STATUS_SYNC_ERROR     =  4;
+    var STATUS_RELOADING      = exports.STATUS_RELOADING      =  5;
+    var STATUS_RESTARTING     = exports.STATUS_RESTARTING     =  6;
 
     var Async                = brackets.getModule("utils/Async"),
         Dialogs              = brackets.getModule("widgets/Dialogs"),
@@ -572,6 +572,10 @@ define(function (require, exports, module) {
                 if (exports.status < STATUS_ACTIVE) {
                     _protocol.launch(_server.pathToUrl(doc.file.fullPath));
                 }
+                if (exports.status === STATUS_RESTARTING) {
+                    // change page in browser
+                    _protocol.navigate(_server.pathToUrl(doc.file.fullPath));
+                }
 
                 $(_protocol)
                     // TODO: timeout if we don't get a connection within a certain time
@@ -588,7 +592,7 @@ define(function (require, exports, module) {
                     .on("Connection.close.livedev", function (event, msg) {
                         // close session when the last connection was closed
                         if (_protocol.getConnectionIds().length === 0) {
-                            if (exports.status !== STATUS_RELOADING) {
+                            if (exports.status <= STATUS_ACTIVE) {
                                 close("detached_target_closed");
                             }
                         }
@@ -631,8 +635,7 @@ define(function (require, exports, module) {
      * @param {Document} doc
      */
     function _doLaunchAfterServerReady(initialDoc) {
-        // update status
-        _setStatus(STATUS_CONNECTING);
+
         _createLiveDocumentForFrame(initialDoc);
 
         // start listening for requests
@@ -706,19 +709,18 @@ define(function (require, exports, module) {
             isViewable = _server && _server.canServe(doc.file.fullPath);
         
         if (_liveDocument.doc.url !== docUrl && isViewable) {
-            // Update status
-            _setStatus(STATUS_CONNECTING);
-
             // clear live doc and related docs
             _closeDocuments();
 
             // create new live doc
             _createLiveDocumentForFrame(doc);
+            _setStatus(STATUS_RESTARTING);
+            _open(doc);
 
-            open();
         }
     }
 
+    
     /**
      * Open a live preview on the current docuemnt.
      */
@@ -741,6 +743,7 @@ define(function (require, exports, module) {
             // wait for server (StaticServer, Base URL or file:)
             prepareServerPromise
                 .done(function () {
+                    _setStatus(STATUS_CONNECTING);
                     _doLaunchAfterServerReady(doc);
                 })
                 .fail(function () {

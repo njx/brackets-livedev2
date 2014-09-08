@@ -59,13 +59,14 @@ define(function main(require, exports, module) {
         Strings.LIVE_DEV_STATUS_TIP_NOT_CONNECTED,
         Strings.LIVE_DEV_STATUS_TIP_NOT_CONNECTED,
         Strings.LIVE_DEV_STATUS_TIP_PROGRESS1,
-        Strings.LIVE_DEV_STATUS_TIP_PROGRESS2,
         Strings.LIVE_DEV_STATUS_TIP_CONNECTED,
         Strings.LIVE_DEV_STATUS_TIP_OUT_OF_SYNC,
-        Strings.LIVE_DEV_STATUS_TIP_SYNC_ERROR
+        Strings.LIVE_DEV_STATUS_TIP_SYNC_ERROR,
+        Strings.LIVE_DEV_STATUS_TIP_PROGRESS1,
+        Strings.LIVE_DEV_STATUS_TIP_PROGRESS1
     ];
 
-    var _statusStyle = ["warning", "", "info", "info", "success", "out-of-sync", "sync-error"];  // Status indicator's CSS class
+    var _statusStyle = ["warning", "", "info", "success", "out-of-sync", "sync-error", "info", "info"];  // Status indicator's CSS class
     var _allStatusStyles = _statusStyle.join(" ");
 
     var _$btnGoLive; // reference to the GoLive button
