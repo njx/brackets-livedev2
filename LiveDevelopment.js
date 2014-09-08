@@ -788,11 +788,16 @@ define(function (require, exports, module) {
      * @param {Document} doc
      */
     function _onDirtyFlagChange(event, doc) {
-        // TODO: only want to do this if the document was requested - same logic as in _onDocumentSaved.
-//        if (doc) {
-//            // Set status to out of sync if dirty. Otherwise, set it to active status.
-//            _setStatus(_docIsOutOfSync(doc) ? STATUS_OUT_OF_SYNC : STATUS_ACTIVE);
-//        }
+        if (!isActive() || !_server) {
+            return;
+        }
+        
+        var absolutePath = doc.file.fullPath;
+        
+        if (_liveDocument.isRelated(absolutePath)) {
+            // Set status to out of sync if dirty. Otherwise, set it to active status.
+            _setStatus(_docIsOutOfSync(doc) ? STATUS_OUT_OF_SYNC : STATUS_ACTIVE);
+        }
     }
 
     // TODO: These aren't necessary in the prototype because they're related to servers that are
