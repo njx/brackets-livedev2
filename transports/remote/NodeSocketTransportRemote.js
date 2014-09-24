@@ -61,7 +61,6 @@
                 console.error("[Brackets LiveDev] No socket transport URL injected");
             } else {
                 this._callbacks = callbacks;
-                this.connect(global._Brackets_LiveDev_Socket_Transport_URL);
             }
         },
         
@@ -126,6 +125,13 @@
             } else {
                 console.log("[Brackets LiveDev] Tried to send message over closed connection: " + msgStr);
             }
+        },
+        
+        /** 
+         * Establish web socket connection.
+         */
+        enable: function() {
+            this.connect(global._Brackets_LiveDev_Socket_Transport_URL);
         }
     };
     global._Brackets_LiveDev_Transport = WebSocketTransport;

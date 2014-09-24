@@ -21,9 +21,10 @@
  * 
  */
 
-function DocumentObserver(config) {
-    
+(function (global) {
     "use strict";
+    
+    var ProtocolManager = global._Brackets_LiveDev_ProtocolManager;
     
     var _document = null;
     var _transport;
@@ -102,7 +103,7 @@ function DocumentObserver(config) {
                     newStatus;
                 
                 current = this.stylesheets;
-                newStatus = related().stylesheets;
+                newStatus = this.related().stylesheets;
                 
                 Object.keys(newStatus).forEach(function (v, i) {
                     if (!current[v]) {
@@ -133,7 +134,7 @@ function DocumentObserver(config) {
                     current;
                 
                 current = this.stylesheets;
-                newStatus = related().stylesheets;
+                newStatus = this.related().stylesheets;
                 
                 Object.keys(current).forEach(function (v, i) {
                     if (!newStatus[v]) {
@@ -296,19 +297,13 @@ function DocumentObserver(config) {
     function stop() {
     
     }
-    
-    window.addEventListener('load', function () {
-        //it assumes transport is already set into the browser
-        start(window.document, window._Brackets_LiveDev_Transport);
-    });
-    
-    window.addEventListener('unload', function () {
-        stop();
-    });
 
-    return {
+    var DocumentObserver = {
         start: start,
         stop: stop,
         related: related
     };
-}
+    
+    ProtocolManager.setDocumentObserver(DocumentObserver);
+    
+}(this));
