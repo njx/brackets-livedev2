@@ -62,7 +62,7 @@ define(function (require, exports, module) {
                         Commands = brackets.test.Commands;
                         EditorManager = brackets.test.EditorManager;
                         DocumentManager = brackets.test.DocumentManager;
-                        extensionRequire = brackets.test.ExtensionLoader.getRequireContextForExtension("brackets-livedev2_sebaslv");
+                        extensionRequire = brackets.test.ExtensionLoader.getRequireContextForExtension("brackets-livedev2");
                         LiveDevelopment = extensionRequire("LiveDevelopment");
                         LiveDevProtocol = extensionRequire("protocol/LiveDevProtocol");
                     });
