@@ -890,9 +890,14 @@ define(function (require, exports, module) {
         return _server && _server.getBaseUrl();
     }
     
+    function _getCurrentLiveDoc() {
+        return _liveDocument;
+    }
+    
     // For unit testing
     exports._getServer                = _getServer;
     exports._getInitialDocFromCurrent = _getInitialDocFromCurrent;
+    exports._getCurrentLiveDoc        = _getCurrentLiveDoc;
 
     // Export public functions
     exports.open                = open;

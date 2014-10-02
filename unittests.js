@@ -32,50 +32,148 @@ define(function (require, exports, module) {
         FileUtils       = brackets.getModule("file/FileUtils");
     
     describe("LiveDevelopment2", function () {
+         
+        // load from testWindow
+        var testWindow,
+            brackets,
+            extensionRequire,
+            CommandManager,
+            Commands,
+            EditorManager,
+            DocumentManager,
+            LiveDevelopment,
+            LiveDevProtocol,
+            LiveHTMLDocument,
+            editor;
         
-        describe("RelatedDocuments", function () {
+        var testFolder = FileUtils.getNativeModuleDirectoryPath(module) + "/unittest-files/",
+            tempDir = SpecRunnerUtils.getTempDirectory(),
+            allSpacesRE = /\s+/gi;
 
-            var htmlDocument,
-                head,
-                mockTransport;
-                    
-            var DocumentObserver = require("text!protocol/remote/DocumentObserver.js");
-            DocumentObserver = eval("(" + DocumentObserver.trim() + ")()");
+        beforeEach(function () {
+            // Create a new window that will be shared by ALL tests in this spec.
+            if (!testWindow) {
+                runs(function () {
+                    SpecRunnerUtils.createTestWindowAndRun(this, function (w) {
+                        testWindow = w;
+                        // Load module instances from brackets.test
+                        brackets = testWindow.brackets;
+                        CommandManager = brackets.test.CommandManager;
+                        Commands = brackets.test.Commands;
+                        EditorManager = brackets.test.EditorManager;
+                        DocumentManager = brackets.test.DocumentManager;
+                        extensionRequire = brackets.test.ExtensionLoader.getRequireContextForExtension("brackets-livedev2");
+                        LiveDevelopment = extensionRequire("LiveDevelopment");
+                        LiveDevProtocol = extensionRequire("protocol/LiveDevProtocol");
+                    });
+                });
+                
+                runs(function () {
+                    SpecRunnerUtils.loadProjectInTestWindow(testFolder);
+                });
+            }
+        });
+        
+        afterEach(function () {
+            testWindow.close();
+            testWindow = null;
+            brackets = null;
+            LiveDevelopment = null;
+        });
+        
+        function openLiveDevelopmentAndWait() {
+            runs(function () {
+                LiveDevelopment.open();
+            });
+            waitsFor(
+                function isLiveDevelopmentActive() {
+                    return LiveDevelopment.status === LiveDevelopment.STATUS_ACTIVE;
+                },
+                "livedevelopment.done.opened",
+                5000
+            );
+        }
+
+        describe("Start-up - LiveDevProtocolRemote", function () {
             
-            beforeEach(function () {
-                htmlDocument = window.document.implementation.createHTMLDocument();
-                head = htmlDocument.getElementsByTagName('head')[0];
-                mockTransport = jasmine.createSpyObj('mockTransoprt', ['send']);
-                mockTransport.send.andCallFake(function (msg) { console.log(msg); });
+            it("should establish a browser connection for an opened html file", function () {
+                //open a file
+                runs(function () {
+                    waitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]), "SpecRunnerUtils.openProjectFiles simple1.html", 1000);
+                });
+                
+                openLiveDevelopmentAndWait();
+
+                runs(function () {
+                    expect(LiveDevelopment.status).toBe(LiveDevelopment.STATUS_ACTIVE);
+                });
             });
             
-            afterEach(function () {
-                htmlDocument = null;
-                mockTransport = null;
+            it("should send all external stylesheets as related docs on start-up", function () {
+                var liveDoc;
+                runs(function () {
+                    waitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]), "SpecRunnerUtils.openProjectFiles simple1.html", 1000);
+                });
+                openLiveDevelopmentAndWait();
+                runs(function () {
+                    liveDoc = LiveDevelopment._getCurrentLiveDoc();
+                });
+                waitsFor(
+                    function relatedDocsReceived() {
+                        return (Object.getOwnPropertyNames(liveDoc.getRelated().stylesheets).length > 0);
+                    },
+                    "relateddocuments.done.received",
+                    10000
+                );
+                runs(function () {
+                    expect(liveDoc.isRelated(testFolder + "simple1.css")).toBeTruthy();
+                });
+                runs(function () {
+                    expect(liveDoc.isRelated(testFolder + "simpleShared.css")).toBeTruthy();
+                });
             });
-                 
-            it('should return all the external JS files', function () {
-                
-                var s1Url = "http://some_url.com/s1.js";
-                var s1 = htmlDocument.createElement('script');
-                s1.type = "text/javascript";
-                s1.src = s1Url;
-                head.appendChild(s1);
-                
-                var s2Url = "http://some_url.com/s2.js";
-                var s2 = htmlDocument.createElement('script');
-                s2.type = "text/javascript";
-                s2.src = s2Url;
-                head.appendChild(s2);
-                
-                DocumentObserver.start(htmlDocument, mockTransport);
-                var related = DocumentObserver.related();
-                
-                expect(related.scripts[s1Url]).toBe(true);
-                expect(related.scripts[s2Url]).toBe(true);
-                
+            
+            it("should send all import-ed stylesheets as related docs on start-up", function () {
+                var liveDoc;
+                runs(function () {
+                    waitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]), "SpecRunnerUtils.openProjectFiles simple1.html", 1000);
+                });
+                openLiveDevelopmentAndWait();
+                runs(function () {
+                    liveDoc = LiveDevelopment._getCurrentLiveDoc();
+                });
+                waitsFor(
+                    function relatedDocsReceived() {
+                        return (Object.getOwnPropertyNames(liveDoc.getRelated().scripts).length > 0);
+                    },
+                    "relateddocuments.done.received",
+                    10000
+                );
+                runs(function () {
+                    expect(liveDoc.isRelated(testFolder + "import1.css")).toBeTruthy();
+                });
             });
-                
+            
+            it("should send all external javascript files as related docs on start-up", function () {
+                var liveDoc;
+                runs(function () {
+                    waitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]), "SpecRunnerUtils.openProjectFiles simple1.html", 1000);
+                });
+                openLiveDevelopmentAndWait();
+                runs(function () {
+                    liveDoc = LiveDevelopment._getCurrentLiveDoc();
+                });
+                waitsFor(
+                    function relatedDocsReceived() {
+                        return (Object.getOwnPropertyNames(liveDoc.getRelated().scripts).length > 0);
+                    },
+                    "relateddocuments.done.received",
+                    10000
+                );
+                runs(function () {
+                    expect(liveDoc.isRelated(testFolder + "simple1.js")).toBeTruthy();
+                });
+            });
         });
     });
 });

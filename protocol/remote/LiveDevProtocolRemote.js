@@ -181,6 +181,68 @@
     MessageBroker.on("Page.navigate", Page.navigate);
     MessageBroker.on("Connection.close", Page.close);
         
+    
+    
+    // By the time this executes, there must already be an active transport.
+    if (!transport) {
+        console.error("[Brackets LiveDev] No transport set");
+        return;
+    }
+    
+    var ProtocolManager = {
+        
+        _documentObserver: {},
+        
+        _protocolHandler: {},
+        
+        enable: function () {
+            transport.setCallbacks(this._protocolHandler);
+            transport.enable();
+        },
+        
+        onConnect: function () {
+            this._documentObserver.start(window.document, transport);
+        },
+        
+        onClose: function () {
+            // TODO: This is absolutely temporary solution. It shows a message 
+            // when the connection has been closed. UX decision to be taken on what to do when 
+            // the session is explicitly closed from the Editor side. If the browser can't be closed,
+            // this could be an alternative. A better alternative to this could be a redirection
+            // to a custom static page being served by StaticServer 
+            var body = document.getElementsByTagName("body")[0];
+            body.style.opacity = 0.5;
+            var status = document.createElement("div");
+            status.textContent = "Live Development Session has Ended";
+            status.style.width = "100%";
+            status.style.color = "#fff";
+            status.style.backgroundColor = "#ff0000";
+            status.style.position = "absolute";
+            status.style.top = 0;
+            status.style.left = 0;
+            status.style.padding = "0.2em";
+            status.style.zIndex = 2227;
+            body.appendChild(status);
+        },
+        
+        setDocumentObserver: function (documentOberver) {
+            if (!documentOberver) {
+                return;
+            }
+            this._documentObserver = documentOberver;
+        },
+        
+        setProtocolHandler: function (protocolHandler) {
+            if (!protocolHandler) {
+                return;
+            }
+            this._protocolHandler = protocolHandler;
+        }
+    };
+    
+    // exposing ProtocolManager
+    global._Brackets_LiveDev_ProtocolManager = ProtocolManager;
+    
     /**
      * The remote handler for the protocol.
      */
@@ -204,35 +266,18 @@
         },
         
         close: function (evt) {
-                    
-            // TODO: This is absolutely temporary solution. It shows a message 
-            // when the connection has been closed. UX decision to be taken on what to do when 
-            // the session is explicitly closed from the Editor side. If the browser can't be closed,
-            // this could be an alternative. A better alternative to this could be a redirection
-            // to a custom static page being served by StaticServer 
-            var body = document.getElementsByTagName("body")[0];
-            body.style.opacity = 0.5;
-            var status = document.createElement("div");
-            status.textContent = "Live Development Session has Ended";
-            status.style.width = "100%";
-            status.style.color = "#fff";
-            status.style.backgroundColor = "#ff0000";
-            status.style.position = "absolute";
-            status.style.top = 0;
-            status.style.left = 0;
-            status.style.padding = "0.2em";
-            status.style.zIndex = 2227;
-            body.appendChild(status);
-
+            ProtocolManager.onClose();
+        },
+        
+        connect: function (evt) {
+            ProtocolManager.onConnect();
         }
     };
     
-    // By the time this executes, there must already be an active transport.
-    if (!transport) {
-        console.error("[Brackets LiveDev] No transport set");
-        return;
-    }
+    ProtocolManager.setProtocolHandler(ProtocolHandler);
     
-    transport.setCallbacks(ProtocolHandler);
+    window.addEventListener('load', function () {
+        ProtocolManager.enable();
+    });
     
 }(this));

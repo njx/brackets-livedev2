@@ -202,7 +202,7 @@ define(function (require, exports, module) {
     function getRemoteFunctionsScript() {
         var script = "";
         // Inject DocumentObserver into the browser (tracks related documents)
-        script += "window._DocumentObserver=" + DocumentObserver + "();";
+        script += DocumentObserver;
         // Inject remote functions into the browser.
         script += "window._LD=" + AddedRemoteFunctions + "(" + RemoteFunctions + "())";
         return "<script>\n" + script + "</script>\n";
