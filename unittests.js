@@ -82,7 +82,7 @@ define(function (require, exports, module) {
             LiveDevelopment = null;
         });
         
-        function openLiveDevelopmentAndWait() {
+        function waitsForLiveDevelopmentToOpen() {
             runs(function () {
                 LiveDevelopment.open();
             });
@@ -103,7 +103,7 @@ define(function (require, exports, module) {
                     waitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]), "SpecRunnerUtils.openProjectFiles simple1.html", 1000);
                 });
                 
-                openLiveDevelopmentAndWait();
+                waitsForLiveDevelopmentToOpen();
 
                 runs(function () {
                     expect(LiveDevelopment.status).toBe(LiveDevelopment.STATUS_ACTIVE);
@@ -115,7 +115,7 @@ define(function (require, exports, module) {
                 runs(function () {
                     waitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]), "SpecRunnerUtils.openProjectFiles simple1.html", 1000);
                 });
-                openLiveDevelopmentAndWait();
+                waitsForLiveDevelopmentToOpen();
                 runs(function () {
                     liveDoc = LiveDevelopment._getCurrentLiveDoc();
                 });
@@ -139,7 +139,7 @@ define(function (require, exports, module) {
                 runs(function () {
                     waitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]), "SpecRunnerUtils.openProjectFiles simple1.html", 1000);
                 });
-                openLiveDevelopmentAndWait();
+                waitsForLiveDevelopmentToOpen();
                 runs(function () {
                     liveDoc = LiveDevelopment._getCurrentLiveDoc();
                 });
@@ -160,7 +160,7 @@ define(function (require, exports, module) {
                 runs(function () {
                     waitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]), "SpecRunnerUtils.openProjectFiles simple1.html", 1000);
                 });
-                openLiveDevelopmentAndWait();
+                waitsForLiveDevelopmentToOpen();
                 
                 runs(function () {
                     liveDoc = LiveDevelopment._getCurrentLiveDoc();
@@ -182,7 +182,7 @@ define(function (require, exports, module) {
                 runs(function () {
                     waitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]), "SpecRunnerUtils.openProjectFiles simple1.html", 1000);
                 });
-                openLiveDevelopmentAndWait();
+                waitsForLiveDevelopmentToOpen();
                 
                 runs(function () {
                     liveDoc = LiveDevelopment._getCurrentLiveDoc();
