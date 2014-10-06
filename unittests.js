@@ -47,7 +47,6 @@ define(function (require, exports, module) {
             editor;
         
         var testFolder = FileUtils.getNativeModuleDirectoryPath(module) + "/unittest-files/",
-            tempDir = SpecRunnerUtils.getTempDirectory(),
             allSpacesRE = /\s+/gi;
 
         beforeEach(function () {
