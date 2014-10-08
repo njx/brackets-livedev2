@@ -47,7 +47,6 @@ define(function (require, exports, module) {
             editor;
         
         var testFolder = FileUtils.getNativeModuleDirectoryPath(module) + "/unittest-files/",
-            tempDir = SpecRunnerUtils.getTempDirectory(),
             allSpacesRE = /\s+/gi;
 
         beforeEach(function () {
@@ -75,13 +74,14 @@ define(function (require, exports, module) {
         });
         
         afterEach(function () {
-            testWindow.close();
+            SpecRunnerUtils.closeTestWindow();
             testWindow = null;
             brackets = null;
             LiveDevelopment = null;
+            LiveDevProtocol = null;
         });
         
-        function openLiveDevelopmentAndWait() {
+        function waitsForLiveDevelopmentToOpen() {
             runs(function () {
                 LiveDevelopment.open();
             });
@@ -102,7 +102,7 @@ define(function (require, exports, module) {
                     waitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]), "SpecRunnerUtils.openProjectFiles simple1.html", 1000);
                 });
                 
-                openLiveDevelopmentAndWait();
+                waitsForLiveDevelopmentToOpen();
 
                 runs(function () {
                     expect(LiveDevelopment.status).toBe(LiveDevelopment.STATUS_ACTIVE);
@@ -114,7 +114,7 @@ define(function (require, exports, module) {
                 runs(function () {
                     waitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]), "SpecRunnerUtils.openProjectFiles simple1.html", 1000);
                 });
-                openLiveDevelopmentAndWait();
+                waitsForLiveDevelopmentToOpen();
                 runs(function () {
                     liveDoc = LiveDevelopment._getCurrentLiveDoc();
                 });
@@ -138,7 +138,7 @@ define(function (require, exports, module) {
                 runs(function () {
                     waitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]), "SpecRunnerUtils.openProjectFiles simple1.html", 1000);
                 });
-                openLiveDevelopmentAndWait();
+                waitsForLiveDevelopmentToOpen();
                 runs(function () {
                     liveDoc = LiveDevelopment._getCurrentLiveDoc();
                 });
@@ -159,7 +159,8 @@ define(function (require, exports, module) {
                 runs(function () {
                     waitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]), "SpecRunnerUtils.openProjectFiles simple1.html", 1000);
                 });
-                openLiveDevelopmentAndWait();
+                waitsForLiveDevelopmentToOpen();
+                
                 runs(function () {
                     liveDoc = LiveDevelopment._getCurrentLiveDoc();
                 });
@@ -172,6 +173,52 @@ define(function (require, exports, module) {
                 );
                 runs(function () {
                     expect(liveDoc.isRelated(testFolder + "simple1.js")).toBeTruthy();
+                });
+            });
+            
+            it("should send notifications for added/removed stylesheets through link nodes", function () {
+                var liveDoc;
+                runs(function () {
+                    waitsForDone(SpecRunnerUtils.openProjectFiles(["simple1.html"]), "SpecRunnerUtils.openProjectFiles simple1.html", 1000);
+                });
+                waitsForLiveDevelopmentToOpen();
+                
+                runs(function () {
+                    liveDoc = LiveDevelopment._getCurrentLiveDoc();
+                });
+                
+                runs(function () {
+                    var curDoc =  DocumentManager.getCurrentDocument();
+                    curDoc.replaceRange('<link href="simple2.css" rel="stylesheet">\n', {line: 8, ch: 0});
+                });
+                
+                waitsFor(
+                    function relatedDocsReceived() {
+                        return (Object.getOwnPropertyNames(liveDoc.getRelated().stylesheets).length === 4);
+                    },
+                    "relateddocuments.done.received",
+                    10000
+                );
+                
+                runs(function () {
+                    expect(liveDoc.isRelated(testFolder + "simple2.css")).toBeTruthy();
+                });
+                
+                runs(function () {
+                    var curDoc =  DocumentManager.getCurrentDocument();
+                    curDoc.replaceRange('', {line: 8, ch: 0}, {line: 8, ch: 50});
+                });
+                
+                waitsFor(
+                    function relatedDocsReceived() {
+                        return (Object.getOwnPropertyNames(liveDoc.getRelated().stylesheets).length === 3);
+                    },
+                    "relateddocuments.done.received",
+                    10000
+                );
+                
+                runs(function () {
+                    expect(liveDoc.isRelated(testFolder + "simple2.css")).toBeFalsy();
                 });
             });
         });

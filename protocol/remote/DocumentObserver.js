@@ -103,7 +103,7 @@
                     newStatus;
                 
                 current = this.stylesheets;
-                newStatus = this.related().stylesheets;
+                newStatus = related().stylesheets;
                 
                 Object.keys(newStatus).forEach(function (v, i) {
                     if (!current[v]) {
@@ -134,7 +134,7 @@
                     current;
                 
                 current = this.stylesheets;
-                newStatus = this.related().stylesheets;
+                newStatus = related().stylesheets;
                 
                 Object.keys(current).forEach(function (v, i) {
                     if (!newStatus[v]) {
