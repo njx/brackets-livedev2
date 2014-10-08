@@ -74,11 +74,11 @@ define(function (require, exports, module) {
         });
         
         afterEach(function () {
-            DocumentManager.closeAll();
-            testWindow.close();
+            SpecRunnerUtils.closeTestWindow();
             testWindow = null;
             brackets = null;
             LiveDevelopment = null;
+            LiveDevProtocol = null;
         });
         
         function waitsForLiveDevelopmentToOpen() {
